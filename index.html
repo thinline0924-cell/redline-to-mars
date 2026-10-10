@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>REDLINE TO MARS</title>
+  <meta name="description" content="1990年代のアメリカでロケットを開発し、火星へ行って帰ってくる戦略ボードゲーム(3D・一人称)">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;700;800&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="view"></div>
+  <div id="tip" class="tip hidden"></div>
+  <div id="toast" class="toast"></div>
+
+  <!-- 上の指示ボード -->
+  <header class="hint">
+    <div class="hint-in">
+      <b id="hintTitle">REDLINE TO MARS</b>
+      <span id="hintSub"></span>
+    </div>
+  </header>
+
+  <!-- 右のパネル(ベージュの枠+黒板) -->
+  <aside id="panel" class="panel">
+    <button id="panelToggle" class="panel-toggle" title="パネルを開く/閉じる">⇔</button>
+    <div class="frame">
+      <div class="lamps"><i></i><i></i></div>
+      <nav class="tabs">
+        <button class="tab" data-act="tab" data-a="rd">開発</button>
+        <button class="tab" data-act="tab" data-a="hangar">組立<span class="badge" hidden></span></button>
+        <button class="tab" data-act="tab" data-a="fleet">宇宙船<span class="badge" hidden></span></button>
+        <button class="tab" data-act="tab" data-a="crew">飛行士</button>
+        <button class="tab" data-act="tab" data-a="log">記録</button>
+      </nav>
+      <div id="panelBody" class="chalk"></div>
+      <div class="frame-foot"><span class="vents"></span><span>MISSION CONTROL TERMINAL</span><span class="vents"></span></div>
+    </div>
+  </aside>
+
+  <!-- 右下の状態バー -->
+  <div id="hud" class="hud"></div>
+
+  <!-- 左下のボタン -->
+  <div class="dock">
+    <button id="nextBtn" class="next-btn">次の月へ ▶</button>
+    <div class="dock-sub">
+      <button id="helpBtn" class="ghost">? 遊び方</button>
+      <button id="soundBtn" class="ghost">♪ 音</button>
+    </div>
+  </div>
+
+  <!-- ダイアログ -->
+  <div id="modal" class="modal hidden"><div id="modalBox" class="modal-box"></div></div>
+
+  <!-- タイトル -->
+  <div id="title" class="title-screen hidden">
+    <div class="frame big">
+      <div class="lamps"><i></i><i></i></div>
+      <div class="chalk title-chalk">
+        <div class="ib-title huge">REDLINE<br>TO MARS</div>
+        <p class="title-sub">1990年、アメリカ。火星へ行って、帰ってこい。</p>
+        <p class="title-lead">ロケットを開発し、欠陥をつぶし、窓を待ち、宇宙で船を組み立てる。<br>お金・時間・命をはかりにかける、ローポリ3Dの戦略ボードゲーム。</p>
+        <div class="title-btns">
+          <button id="continueBtn" class="btn go big" hidden>続きから</button>
+          <button class="btn go big" data-new="normal">新しく始める<small>標準:2001年12月まで</small></button>
+          <button class="btn big" data-new="hard">ハードで始める<small>2000年12月まで・資金少なめ</small></button>
+          <button id="titleHelp" class="btn">遊び方</button>
+        </div>
+      </div>
+      <div class="frame-foot"><span class="vents"></span><span>BLUEBONNET AEROSPACE INC.</span><span class="vents"></span></div>
+    </div>
+  </div>
+
+  <!-- 起動中 -->
+  <div id="boot" class="boot"><div><div class="ib-title">REDLINE TO MARS</div><p id="bootText">読み込み中…</p></div></div>
+
+  <script type="module" src="js/main.js"></script>
+  <noscript>このゲームを遊ぶには JavaScript を有効にしてください。</noscript>
+</body>
+</html>

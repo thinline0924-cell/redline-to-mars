@@ -1,0 +1,13 @@
+# 変更が届くたびに、プログラムの書き間違いがないかを自動で点検する(GitHub が無料で実行)
+name: 点検
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 文法の点検
+        run: for f in js/*.js tests/*.mjs; do node --check "$f"; done
