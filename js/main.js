@@ -372,7 +372,9 @@ function openBurn(craftId, mId) {
     const r = G.performManeuver(S, craftId, mId, uids);
     if (!r.ok) { toast(r.msg); return; }
     if (mId === 'launch') { sfx.launch(); scene.effect('launch'); }
-    showReport(r.report, o.m.label);
+    const dz = r.report.disaster;
+    if (dz && (dz.lost.length || dz.escaped.length)) { closeModal(); playDistress(r.report).then(() => showReport(r.report, o.m.label)); }
+    else showReport(r.report, o.m.label);
   };
 }
 
@@ -393,6 +395,78 @@ function showReport(report, title) {
   }, end);
   if (report.outcome === 'lost') scene.effect('lost', { craftId: report.craftId });
   afterAction();
+}
+
+// ---------- 事故の演出(飛行士の乗った船を失ったとき) ----------
+const CAPCOM = '管制(ヒューストン)';
+function distressScript(rep) {
+  const d = rep.disaster;
+  const crew = [...d.lost, ...d.escaped];
+  const a = crew[0], b = crew[1] || crew[0];
+  const L = (who, text, fx) => ({ who, text, fx });
+  const end = d.lost.length ? [L(null, '', 'static'), L(CAPCOM, `……${d.craft}、応答せよ。${d.craft}、応答せよ……`), L(null, 'SIGNAL LOST — 交信途絶', 'lost')] : [];
+  if (rep.mId === 'launch') {
+    const boom = d.why.includes('爆発');
+    return [
+      L(CAPCOM, `${d.craft}、リフトオフ。順調だ。`),
+      boom ? L(a, 'マスターアラーム! 何かが爆発した!', 'alarm') : L(a, 'エンジンが止まった! 高度が落ちてる!', 'alarm'),
+      L(b, '揺れが止まらない……機体がもたない!'),
+      L(CAPCOM, 'アボート! アボート! 脱出しろ!'),
+      L(a, 'うわあああああっ——!', 'scream'),
+      L(null, '', 'static'),
+      ...(d.escaped.length ? [L(CAPCOM, '……パラシュートを確認。乗員の生存を確認した。'), L(null, 'CREW RECOVERED — 乗員救助', 'saved')] : end),
+    ];
+  }
+  if (rep.mId === 'mland') return [
+    L(a, '降下が速すぎる! 噴射が足りない!', 'alarm'), L(b, '地面が——!'), L(a, 'いやだ、いやだあああっ——!', 'scream'), ...end];
+  if (rep.mId === 'deorbit' || rep.mId === 'eentry' || rep.mId === 'maero') return [
+    L(a, 'シールドが焼けてる……熱い、熱い!', 'alarm'), L(b, 'ヒューストン、聞こえるか! 船体が割れ——'), L(a, 'ああああああっ——!', 'scream'), ...end];
+  if (rep.mId === 'mflyby') return [
+    L(a, '減速できない……火星が遠ざかっていく。'), L(b, 'ヒューストン……家族に、愛していると伝えてくれ。'), L(CAPCOM, '……了解した。必ず伝える。'), L(null, '', 'static'), L(null, 'SIGNAL LOST — 交信途絶', 'lost')];
+  return [
+    L(a, '何かが爆発した! 船内の気圧が下がってる!', 'alarm'), L(b, 'ハッチを閉めろ! 早く——!'), L(a, 'ぐああああっ——!', 'scream'), ...end];
+}
+function playDistress(rep) {
+  return new Promise((resolve) => {
+    const lines = distressScript(rep);
+    scene.effect('lost', { craftId: rep.craftId });
+    const el = document.createElement('div');
+    el.className = 'distress';
+    el.innerHTML = `<div class="ds-box"><div class="ds-head"><span class="ds-rec">● REC</span><span>交信記録 — ${esc(rep.disaster.craft)}</span><span class="ds-time"></span></div>
+      <div class="ds-lines"></div><button class="ds-skip">スキップ ▶</button></div>`;
+    document.body.appendChild(el);
+    document.body.classList.add('shaking');
+    const box = el.querySelector('.ds-lines'), clock = el.querySelector('.ds-time');
+    const t0 = 30 + Math.floor(Math.random() * 40);
+    let i = 0, timer = 0, done = false;
+    const finish = () => {
+      if (done) return; done = true; clearTimeout(timer);
+      document.body.classList.remove('shaking');
+      el.classList.add('out'); setTimeout(() => el.remove(), 400);
+      resolve();
+    };
+    el.querySelector('.ds-skip').onclick = finish;
+    const step = () => {
+      if (i >= lines.length) { timer = setTimeout(finish, 1800); return; }
+      const ln = lines[i++];
+      { const sec = t0 + i * 3; clock.textContent = `T+${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`; }
+      if (ln.fx === 'alarm') sfx.alarm(4);
+      if (ln.fx === 'scream') { sfx.scream(0.1); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 600); }
+      if (ln.fx === 'static') { sfx.radio(1.2, 0.07); document.body.classList.remove('shaking'); }
+      if (ln.fx === 'lost' || ln.fx === 'saved') {
+        box.insertAdjacentHTML('beforeend', `<div class="ds-banner ${ln.fx}">${esc(ln.text)}</div>`);
+        if (ln.fx === 'lost') sfx.radio(2.0, 0.04);
+      } else if (ln.fx === 'static') {
+        box.insertAdjacentHTML('beforeend', `<div class="ds-static">ザ——————ッ……</div>`);
+      } else {
+        sfx.radio(0.15, 0.04);
+        box.insertAdjacentHTML('beforeend', `<div class="ds-line ${ln.fx === 'scream' ? 'scream' : ''} ${ln.who === CAPCOM ? 'capcom' : ''}"><b>${esc(ln.who)}</b><span>${esc(ln.text)}</span></div>`);
+      }
+      box.scrollTop = box.scrollHeight;
+      timer = setTimeout(step, ln.fx === 'scream' ? 2000 : ln.fx === 'static' ? 1300 : 1700);
+    };
+    timer = setTimeout(step, 500);
+  });
 }
 
 function openSplit(craftId) {

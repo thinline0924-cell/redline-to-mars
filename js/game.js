@@ -333,9 +333,11 @@ function breakRandom(s, craft, filter, report) {
   report.lines.push(`「${PARTS[p.type].name}」が壊れて失われた。`);
 }
 function destroyCraft(s, craft, report, why, opts = {}) {
+  // 演出用:だれが乗っていて、助かったか
+  report.disaster = { craft: craft.name, why, escaped: [], lost: [] };
   for (const c of crewOf(s, craft)) {
-    if (opts.escape) { c.status = 'earth'; c.craft = null; hurt(s, c, 1, why); report.lines.push(`${c.name} は脱出装置で助かった。`); }
-    else killCrew(s, c, why);
+    if (opts.escape) { c.status = 'earth'; c.craft = null; hurt(s, c, 1, why); report.lines.push(`${c.name} は脱出装置で助かった。`); report.disaster.escaped.push(c.name); }
+    else { report.disaster.lost.push(c.name); killCrew(s, c, why); }
   }
   craft.crew = [];
   s.crafts = s.crafts.filter(c => c !== craft);
@@ -393,7 +395,7 @@ function arriveEarth(s, craft, report) {
 // 移動を実行する。rocketUids = 噴射に使うロケット
 export function performManeuver(s, craftId, mId, rocketUids) {
   const craft = getCraft(s, craftId);
-  const report = { lines: [], draws: [], outcome: 'ok', craftId, from: craft?.loc };
+  const report = { lines: [], draws: [], outcome: 'ok', craftId, from: craft?.loc, mId };
   if (!craft) return { ok: false, msg: '船がありません' };
   const opt = maneuversFor(s, craft).find(o => o.m.id === mId);
   if (!opt) return { ok: false, msg: 'ここからはその移動はできません' };
@@ -418,7 +420,9 @@ export function performManeuver(s, craftId, mId, rocketUids) {
 
   if (m.flyby) {
     report.lines.push(`${craft.name} は火星を通り過ぎ、二度と戻らない軌道へ去っていった。`);
-    for (const c of crewOf(s, craft)) killCrew(s, c, '宇宙のかなたへ');
+    const lost = crewOf(s, craft);
+    if (lost.length) report.disaster = { craft: craft.name, why: '宇宙のかなたへ', escaped: [], lost: lost.map(c => c.name) };
+    for (const c of lost) killCrew(s, c, '宇宙のかなたへ');
     s.crafts = s.crafts.filter(x => x !== craft);
     report.outcome = 'gone';
     return { ok: true, report };

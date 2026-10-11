@@ -36,6 +36,29 @@ export const sfx = {
   bad() { tone(220, 0.3, 'sawtooth', 0.06); tone(160, 0.4, 'sawtooth', 0.06, 0.18); },
   card(ok) { tone(ok === 'S' ? 880 : ok === 'm' ? 440 : 160, 0.14, ok === 'M' ? 'sawtooth' : 'triangle', 0.07); },
   launch() { noise(3.0, 0.12, 0, 300); tone(60, 2.5, 'sawtooth', 0.04, 0, 40); },
+  // 警報(2つの音を交互に)
+  alarm(times = 4) { for (let i = 0; i < times; i++) { tone(880, 0.22, 'square', 0.05, i * 0.5); tone(660, 0.22, 'square', 0.05, i * 0.5 + 0.25); } },
+  // 無線の雑音
+  radio(dur = 0.6, vol = 0.05) { noise(dur, vol, 0, 3200); },
+  // 無線ごしの悲鳴(声の高さが上ずってから落ちていく音を、帯域をしぼって無線らしくする)
+  scream(delay = 0) {
+    const a = ac(); if (!a || !on) return;
+    const t = a.currentTime + delay, dur = 1.5;
+    const o = a.createOscillator(), o2 = a.createOscillator(), vib = a.createOscillator(), vibG = a.createGain();
+    const bp = a.createBiquadFilter(), bp2 = a.createBiquadFilter(), sh = a.createWaveShaper(), g = a.createGain();
+    o.type = 'sawtooth'; o2.type = 'sawtooth';
+    o.frequency.setValueAtTime(420, t); o.frequency.linearRampToValueAtTime(760, t + 0.25); o.frequency.exponentialRampToValueAtTime(260, t + dur);
+    o2.frequency.setValueAtTime(426, t); o2.frequency.linearRampToValueAtTime(772, t + 0.25); o2.frequency.exponentialRampToValueAtTime(250, t + dur);
+    vib.frequency.value = 7; vibG.gain.value = 24; vib.connect(vibG); vibG.connect(o.frequency); vibG.connect(o2.frequency);
+    bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 2.5;
+    bp2.type = 'bandpass'; bp2.frequency.value = 2600; bp2.Q.value = 3;
+    const curve = new Float32Array(256); for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 4); } sh.curve = curve;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + 0.08); g.gain.setValueAtTime(0.09, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const mix = a.createGain(); o.connect(mix); o2.connect(mix); mix.connect(sh);
+    sh.connect(bp); sh.connect(bp2); bp.connect(g); bp2.connect(g); g.connect(a.destination);
+    [o, o2, vib].forEach(x => { x.start(t); x.stop(t + dur + 0.05); });
+    noise(dur, 0.035, delay, 3500);
+  },
   boom() { noise(1.2, 0.2, 0, 500); tone(80, 0.8, 'sawtooth', 0.08, 0, -40); },
 };
 export function soundOn() { return on; }
