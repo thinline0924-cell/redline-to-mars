@@ -192,18 +192,20 @@ export function canAddPart(s, craft, type) {
   if (craft.parts.length >= 40) return '部品が多すぎます';
   return null;
 }
-export function addPart(s, craftId, type) {
+// use:ロケットの使い道。'launch' = 打ち上げ用、'space' = 宇宙で使う用(火星へ出発・減速・着陸など)、なし = どちらでも
+export function addPart(s, craftId, type, use) {
   const craft = getCraft(s, craftId); if (!craft) return { ok: false, msg: '船がありません' };
   const why = canAddPart(s, craft, type); if (why) return { ok: false, msg: why };
   const part = { uid: newId(s), type };
+  if (use && PARTS[type].kind === 'rocket') part.use = use;
   if (type === 'SUPPLY') part.fill = SUPPLY_PER_CRATE;
   craft.parts.push(part);
   return { ok: true };
 }
-export function removePartType(s, craftId, type) {
+export function removePartType(s, craftId, type, use) {
   const craft = getCraft(s, craftId);
   if (!craft || craft.loc !== 'earth') return { ok: false, msg: '地上の船だけ変更できます' };
-  for (let i = craft.parts.length - 1; i >= 0; i--) if (craft.parts[i].type === type) { craft.parts.splice(i, 1); break; }
+  for (let i = craft.parts.length - 1; i >= 0; i--) if (craft.parts[i].type === type && (!use || craft.parts[i].use === use)) { craft.parts.splice(i, 1); break; }
   fixSeats(s, craft);
   return { ok: true };
 }
@@ -245,10 +247,17 @@ export function eligibleRockets(craft, m) {
 export function requiredThrust(s, craft, m) { return Math.ceil(maneuverDiff(s, craft, m) * craftMass(craft)); }
 
 // 使うロケットを自動で選ぶ:再利用できるものを先に使い、残りは推力の余りが最小になる組み合わせ
+// 使い道が合うロケット(打ち上げなら「打ち上げ用」、それ以外なら「宇宙用」)を優先して使う
 export function autoSelect(s, craft, m) {
   const need = requiredThrust(s, craft, m);
   if (need <= 0) return [];
-  const rockets = eligibleRockets(craft, m);
+  const all = eligibleRockets(craft, m);
+  const avoid = m.id === 'launch' ? 'space' : 'launch';
+  const preferred = all.filter(r => r.use !== avoid);
+  const sum = (list) => list.reduce((a, r) => a + PARTS[r.type].thrust, 0);
+  return pickRockets(sum(preferred) >= need ? preferred : all, need);
+}
+function pickRockets(rockets, need) {
   const chosen = []; let have = 0;
   for (const r of rockets) if (PARTS[r.type].reusable) { chosen.push(r.uid); have += PARTS[r.type].thrust; }
   if (have >= need) return chosen;

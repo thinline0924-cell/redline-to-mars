@@ -159,6 +159,30 @@ function simulatePlan(craft) {
   }
   return { out, ok };
 }
+// 見積もりで ✗ がなくなるまで、足りない場所にロケットを足す(宇宙用 → 打ち上げ用の順に)
+function autoFill() {
+  const craft = G.getCraft(S, selDraft); if (!craft) return { ok: false, msg: '船を選んでください' };
+  const spaceType = G.owned(S, 'LIQUID') ? 'CONDOR' : null;
+  const liftType = G.owned(S, 'HEAVY') ? 'GOLIATH' : G.owned(S, 'LIQUID') ? 'CONDOR' : null;
+  if (!liftType) return { ok: false, msg: '先に「液体燃料エンジン」を開発してください' };
+  let added = 0;
+  for (let i = 0; i < 80; i++) {
+    // まず、打ち上げ用だけで持ち上がるようにする(宇宙用を打ち上げで使ってしまわないように)
+    const liftNeed = Math.ceil(5 * G.craftMass(craft));
+    const liftHave = craft.parts.filter(p => PARTS[p.type].kind === 'rocket' && p.use !== 'space' && !PARTS[p.type].noSurface).reduce((a, p) => a + PARTS[p.type].thrust, 0);
+    if (craft.parts.some(p => p.use === 'space') && liftHave < liftNeed) { G.addPart(S, craft.id, liftType, 'launch'); added++; continue; }
+    const plan = simulatePlan(craft);
+    const bad = plan.out.find(r => !r.pass);
+    if (!bad) break;
+    if (bad.missingTech.length) return { ok: false, msg: `「${TECHS[bad.missingTech[0]].name}」が未開発のため、${bad.m.label}はできません` };
+    if (bad.m.id === 'launch') G.addPart(S, craft.id, liftType, 'launch');
+    else if (spaceType) G.addPart(S, craft.id, spaceType, 'space');
+    else return { ok: false, msg: '宇宙で使えるロケットがありません' };
+    added++;
+  }
+  if (simulatePlan(craft).out.some(r => !r.pass)) return { ok: false, msg: 'ロケットを足しても届きませんでした。荷物を減らすか、宇宙で組み立ててください' };
+  return { ok: true, msg: added ? `ロケットを${added}基足しました(費用 ${m1(G.craftCost(craft, S))})` : 'もう足りています' };
+}
 function autoSelectFor(craft, m, need) {
   // 見積もり用:難しさを need に合わせた仮の移動で自動選択を使う
   const mass = G.craftMass(craft) || 1;
@@ -173,20 +197,24 @@ function panelHangar() {
   const drafts = S.crafts.filter(c => c.loc === 'earth');
   if (selDraft && !drafts.some(c => c.id === selDraft)) selDraft = null;
   if (!selDraft && drafts.length) selDraft = drafts[0].id;
-  let h = `<h2>組み立て工場</h2><p class="lead">部品を選んで船を組み、発射台から打ち上げる。<b>必要な推力 = 難しさ × 船の重さ</b>(使うロケット自身の重さも入る)。お金は打ち上げのときに払う。発射は1か月に1回。</p>
+  let h = `<h2>組み立て工場</h2><p class="lead">部品を選んで船を組み、発射台から打ち上げる。<b>必要な推力 = 難しさ × 船の重さ</b>(まだ使っていないロケットの重さも入る)。火星へ行くなら、<b>宇宙で使うロケット</b>も一緒に積んで打ち上げる。お金は打ち上げのときに払う。発射は1か月に1回。</p>
   <div class="chips">${drafts.map(c => `<button class="chip ${c.id === selDraft ? 'on' : ''}" data-act="selDraft" data-a="${c.id}">${esc(c.name)}</button>`).join('')}
   <button class="chip add" data-act="newDraft">+ 新しい船</button></div>`;
   const craft = G.getCraft(S, selDraft);
   if (!craft) return h + '<p class="empty">「+ 新しい船」で設計を始めよう。</p>';
-  const count = (t) => craft.parts.filter(p => p.type === t).length;
-  h += `<div class="grid-parts">`;
-  for (const t of PART_ORDER) {
+  const count = (t, use) => craft.parts.filter(p => p.type === t && (use === undefined || (p.use || 'launch') === use)).length;
+  const partCard = (t, use) => {
     const p = PARTS[t]; const why = G.canAddPart(S, craft, t);
+    if (use === 'launch' && p.noSurface) return '';
     const spec = p.kind === 'rocket' ? `推力${p.thrust}・重さ${p.mass}${p.reusable ? '・再利用' : ''}` : `重さ${p.mass}${p.seats ? `・${p.seats}席` : ''}${t === 'SUPPLY' ? `・${SUPPLY_PER_CRATE}人月` : ''}`;
-    h += `<div class="part ${why ? 'locked' : ''}" title="${esc(why || p.desc)}"><div class="part-name">${esc(p.name)}</div><div class="small">${spec}・${m1(p.cost)}</div>
-      <div class="stepper"><button class="mini" data-act="rmPart" data-a="${t}" ${count(t) ? '' : 'disabled'}>−</button><b>${count(t)}</b><button class="mini" data-act="addPart" data-a="${t}" ${why ? 'disabled' : ''}>+</button></div></div>`;
-  }
-  h += `</div>`;
+    const n = count(t, use);
+    return `<div class="part ${why ? 'locked' : ''}" title="${esc(why || p.desc)}"><div class="part-name">${esc(p.name)}</div><div class="small">${spec}・${m1(p.cost)}</div>
+      <div class="stepper"><button class="mini" data-act="rmPart" data-a="${t}" data-b="${use || ''}" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button class="mini" data-act="addPart" data-a="${t}" data-b="${use || ''}" ${why ? 'disabled' : ''}>+</button></div></div>`;
+  };
+  const rockets = PART_ORDER.filter(t => PARTS[t].kind === 'rocket');
+  h += `<h3>積む物</h3><div class="grid-parts">${PART_ORDER.filter(t => PARTS[t].kind !== 'rocket').map(t => partCard(t)).join('')}</div>`;
+  h += `<h3>宇宙で使うロケット <small>(火星へ出発・減速・着陸・離陸などに使う。打ち上げでは使わない)</small></h3><div class="grid-parts">${rockets.map(t => partCard(t, 'space')).join('')}</div>`;
+  h += `<h3>打ち上げ用ロケット <small>(地上 → 地球のまわり。上の全部を持ち上げて、使い終わったら捨てる)</small></h3><div class="grid-parts">${rockets.map(t => partCard(t, 'launch')).join('')}</div>`;
   const mass = G.craftMass(craft), cost = G.craftCost(craft, S);
   const capSeats = G.seats(craft, 'crew');
   h += `<div class="stats"><span>重さ <b>${mass}</b></span><span>費用 <b>${m1(cost)}</b>${S.freeCondor ? `<small>(払い下げコンドル${S.freeCondor}基 無料)</small>` : ''}</span><span>補給品 <b>${G.supplyLeft(craft)}</b>人月</span></div>`;
@@ -196,13 +224,14 @@ function panelHangar() {
     (crewList.length ? crewList.map(c => `<button class="chip ${craft.crew.includes(c.id) ? 'on' : ''}" data-act="board" data-a="${c.id}">${esc(c.name)}<small>${ROLE_LABEL[c.role]}・健康${c.health}</small></button>`).join('') : '<span class="small">訓練の終わった飛行士がいません(電話で採用)</span>') + '</div>';
   // 見積もり
   const plan = simulatePlan(craft);
-  h += `<h3>飛行計画の見積もり</h3><p class="small">この船で、どこまで行けるかの計算(故障がない場合)。上から順にロケットを使い捨てていく。</p><div class="chips small-chips">${Object.entries(ROUTES).map(([k, r]) => `<button class="chip ${planRoute === k ? 'on' : ''}" data-act="route" data-a="${k}">${r.label}</button>`).join('')}
+  h += `<h3>飛行計画の見積もり</h3><p class="small">この船で、どこまで行けるかの計算(故障がない場合)。打ち上げでは「打ち上げ用」、そのあとは「宇宙で使う」ロケットを順に使い捨てていく。</p><div class="chips small-chips">${Object.entries(ROUTES).map(([k, r]) => `<button class="chip ${planRoute === k ? 'on' : ''}" data-act="route" data-a="${k}">${r.label}</button>`).join('')}
     <button class="chip ${planAero ? 'on' : ''}" data-act="aero">火星での減速:${planAero ? '大気でブレーキ' : 'ロケット'}</button></div>
     <table class="plan"><tr><th>移動</th><th>重さ</th><th>必要/最大の推力</th><th></th></tr>`;
   for (const r of plan.out) {
     h += `<tr class="${r.pass ? 'ok' : 'ng'}"><td>${esc(r.m.label)}${r.assumed ? '<small>(難しさ不明→3で計算)</small>' : ''}</td><td>${r.mass}</td><td>${r.need} / ${r.max}</td><td>${r.missingTech.length ? `<small>要開発:${esc(r.missingTech.map(t => TECHS[t].name).join('・'))}</small>` : r.pass ? '✓' : '✗ 推力不足'}</td></tr>`;
   }
   h += `</table>`;
+  if (plan.out.some(r => !r.pass)) h += `<div class="row"><button class="btn small go" data-act="autoFill">足りないロケットを自動で足す</button><span class="small">目的地:${esc(ROUTES[planRoute].label)}</span></div>`;
   if (craft.crew.length) {
     const sup = crewMonthsNeeded(craft.crew.length);
     const have = G.supplyLeft(craft);
@@ -317,7 +346,7 @@ function openBurn(craftId, mId) {
     h += `<p>必要な推力 = 難しさ <b>${o.diffKnown ? o.diff : '?'}</b> × 重さ <b>${G.craftMass(craft)}</b> = <b>${needTxt}</b></p>
     <div class="burn-list">${rockets.map(r => {
       const p = PARTS[r.type];
-      return `<label class="burn-row"><input type="checkbox" data-uid="${r.uid}" ${sel.has(r.uid) ? 'checked' : ''}> <b>${esc(p.name)}</b> 推力${p.thrust}${p.reusable ? '(再利用)' : ''} <span class="deck">${deckSummary(p.tech)}</span></label>`;
+      return `<label class="burn-row"><input type="checkbox" data-uid="${r.uid}" ${sel.has(r.uid) ? 'checked' : ''}> <b>${esc(p.name)}</b>${r.use === 'space' ? '<span class="tag">宇宙用</span>' : r.use === 'launch' ? '<span class="tag">打ち上げ用</span>' : ''} 推力${p.thrust}${p.reusable ? '(再利用)' : ''} <span class="deck">${deckSummary(p.tech)}</span></label>`;
     }).join('') || '<p class="warn">使えるロケットがありません</p>'}</div>
     <p class="burn-total">選んだ推力:<b id="burnSum">0</b> / ${needTxt}</p>
     <p class="small">ロケット1基ごとに、その技術の信頼性カードを1枚引く。<b>軽い故障</b>=そのロケットは推力なし、<b>重大な故障</b>=爆発して船を失う${o.m.id === 'launch' ? '(カプセルの飛行士は脱出装置で助かる)' : ''}。</p>`;
@@ -422,7 +451,7 @@ function showHelp() {
   <h3>目的</h3><p>1990年1月、テキサスの宇宙企業「ブルーボネット・エアロスペース」の計画責任者になったあなた。期限までに<b>飛行士を火星の地表に降ろし、生きて地球へ帰す</b>のが目標です。</p>
   <h3>1か月の流れ</h3><p>好きなだけ操作したら、机の上の<b>緑の大きなボタン</b>(または左下の「次の月へ」)で月を進めます。月末に開発が進み、補給品が減り、お金が入ります。ときどきFAXで出来事が届きます。</p>
   <h3>技術とカード</h3><p>技術が完成すると、見えない<b>信頼性カード</b>(ふつう3枚)が付きます。ロケットを噴射するたび、着陸・再突入のたびにカードを1枚引き、<b>成功/軽い故障/重大な故障</b>が決まります。地上試験($1.5M・チーム1つを1か月)でカードを引いて正体を調べ、見つけた欠陥はお金を払って取り除けます。カードが無くなった技術は必ず成功します。<br>→ テストにお金と時間をかけるか、危険を承知で急ぐか。それがこのゲームの悩みどころです。</p>
-  <h3>ロケットと推力</h3><p>移動に必要な推力 = <b>難しさ × 船の重さ</b>。重さには、まだ使っていないロケット自身も入ります。使ったロケットは捨てられて軽くなります(ノヴァNは何度でも使える)。<br>
+  <h3>ロケットと推力</h3><p>移動に必要な推力 = <b>難しさ × 船の重さ</b>。重さには、まだ使っていないロケット自身も入ります。使ったロケットは捨てられて軽くなります(ノヴァNは何度でも使える)。<br>組み立て工場ではロケットを<b>「打ち上げ用」</b>と<b>「宇宙で使う用」</b>に分けて積みます。打ち上げでは打ち上げ用だけを使うので、宇宙で使う用(火星へ出発・減速・着陸など)は宇宙まで残ります。迷ったら「飛行計画の見積もり」の<b>「足りないロケットを自動で足す」</b>を押してください。<br>
   難しさ:打ち上げ 5/火星へ出発 3/火星での減速 2(耐熱シールドで大気ブレーキなら0)/着陸 ?(1〜3、探査機で調べる)/離陸 3/地球へ出発 3/大気圏突入 0(耐熱シールド)</p>
   <h3>出発チャンスと旅</h3><p>惑星は動いているので、火星へは約26か月ごとに2か月だけある<b>出発チャンス</b>のときしか出発できません(ボード上端の年表の緑のマス)。片道7〜8か月。到着した月に減速しないと通り過ぎてしまいます。帰りのチャンスは、行きのチャンスの21か月後です(オレンジのマス)。</p>
   <h3>宇宙での組み立て</h3><p>重い船は一度に打ち上げられません。「ランデブー・ドッキング」で軌道上でつなぎ合わせましょう。火星では、帰りの船を軌道に残し、軽い着陸船だけ降ろす作戦も有効です(切り離し)。</p>
@@ -477,8 +506,13 @@ function act(a, x, y) {
     case 'hire': { const r = G.hireCrew(S, +x); if (!r.ok) toast(r.msg); else sfx.click(); afterAction(); break; }
     case 'newDraft': { const c = G.newDraft(S); selDraft = c.id; afterAction(); break; }
     case 'selDraft': selDraft = +x; renderPanel(); break;
-    case 'addPart': { const r = G.addPart(S, selDraft, x); if (!r.ok) toast(r.msg); afterAction(); break; }
-    case 'rmPart': G.removePartType(S, selDraft, x); afterAction(); break;
+    case 'addPart': { const r = G.addPart(S, selDraft, x, y || undefined); if (!r.ok) toast(r.msg); afterAction(); break; }
+    case 'rmPart': { const c = G.getCraft(S, selDraft); const use = y || undefined;
+      // 使い道なしの古い部品は「打ち上げ用」として数えている
+      if (use === 'launch' && c && !c.parts.some(p => p.type === x && p.use === 'launch')) { const i = c.parts.map(p => p.type === x && !p.use).lastIndexOf(true); if (i >= 0) c.parts.splice(i, 1); }
+      else G.removePartType(S, selDraft, x, use);
+      afterAction(); break; }
+    case 'autoFill': { const r = autoFill(); toast(r.msg, r.ok ? 'info' : 'error'); afterAction(); break; }
     case 'delDraft': confirmBox('この設計を取り消しますか?(まだお金は払っていません)', '取り消す', () => { G.deleteDraft(S, selDraft); selDraft = null; afterAction(); }); break;
     case 'board': { const r = G.boardCrew(S, selDraft, +x); if (!r.ok) toast(r.msg); afterAction(); break; }
     case 'route': planRoute = x; renderPanel(); break;
