@@ -23,14 +23,14 @@ export const DIFFICULTY = {
 
 // 行き先(ボードのマス)
 export const NODES = {
-  earth:          { name: '地球(発射場)',   short: '地球',     space: false },
-  leo:            { name: '地球低軌道',     short: 'LEO',      space: true, orbit: true },
-  mto:            { name: '火星遷移軌道',   short: '火星へ',   space: true, transit: true },
-  mars_approach:  { name: '火星接近中',     short: '火星接近', space: true, approach: true },
-  mars_orbit:     { name: '火星周回軌道',   short: '火星軌道', space: true, orbit: true },
+  earth:          { name: '地球(発射場)',     short: '地球',     space: false },
+  leo:            { name: '地球のまわり(低軌道)', short: '地球周回',      space: true, orbit: true },
+  mto:            { name: '火星への航路',     short: '火星へ',   space: true, transit: true },
+  mars_approach:  { name: '火星に接近中',     short: '火星接近', space: true, approach: true },
+  mars_orbit:     { name: '火星のまわり(周回軌道)', short: '火星周回', space: true, orbit: true },
   mars_surface:   { name: '火星の地表',     short: '火星地表', space: true, surface: true },
-  eto:            { name: '地球帰還軌道',   short: '地球へ',   space: true, transit: true },
-  earth_approach: { name: '地球接近中',     short: '地球接近', space: true, approach: true },
+  eto:            { name: '地球への航路',     short: '地球へ',   space: true, transit: true },
+  earth_approach: { name: '地球に接近中',     short: '地球接近', space: true, approach: true },
 };
 
 export const TRANSIT_TO_MARS = 7;   // 火星まで何か月かかるか
@@ -47,7 +47,7 @@ export const TECHS = {
   SOLID:      { name: '固体ブースター',   cost: 6,  months: 3,  cards: 3, req: [],        desc: '小さなホーネットが作れる。推力の微調整に便利' },
   HEAVY:      { name: '大型ロケット',     cost: 20, months: 8,  cards: 3, req: ['LIQUID'], desc: '巨大なゴライアスが作れる。重い荷物を打ち上げる' },
   NUCLEAR:    { name: '原子力推進',       cost: 30, months: 12, cards: 3, req: ['HEAVY'],  desc: 'ノヴァN:何度でも使えるエンジン。地上や火星の地表からは使えない' },
-  GUIDANCE:   { name: '深宇宙航法',       cost: 10, months: 5,  cards: 3, req: [],        desc: '地球の軌道を出て惑星へ向かうのに必要' },
+  GUIDANCE:   { name: '深宇宙航法',       cost: 10, months: 5,  cards: 3, req: [],        desc: '「火星へ出発」「地球へ出発」に必要' },
   HEAT:       { name: '耐熱シールド',     cost: 8,  months: 4,  cards: 3, req: [],        desc: '大気圏への再突入・火星での空力ブレーキに必要' },
   LANDING:    { name: '着陸技術',         cost: 14, months: 6,  cards: 3, req: ['HEAT'],  desc: '火星の地表に降りるのに必要' },
   RENDEZVOUS: { name: 'ランデブー・ドッキング', cost: 10, months: 5, cards: 3, req: [],    desc: '宇宙で船をつないだり切り離したりできる' },
@@ -76,22 +76,33 @@ export const SUPPLY_PER_CRATE = 6;  // コンテナ1つで何人月もつか
 
 // 移動(マヌーバ)。diff = 難しさ(必要な推力 = 難しさ × 船の重さ)
 export const MANEUVERS = [
-  { id: 'launch',   from: 'earth',         to: 'leo',          diff: 5, label: '打ち上げ',           techs: [], surface: true },
-  { id: 'deorbit',  from: 'leo',           to: 'earth',        diff: 0, label: '大気圏再突入(帰還)', techs: ['HEAT'], reentry: true },
-  { id: 'tmi',      from: 'leo',           to: 'mto',          diff: 3, label: '火星遷移軌道へ噴射', techs: ['GUIDANCE'], window: 'earth', transfer: true },
-  { id: 'mcap',     from: 'mars_approach', to: 'mars_orbit',   diff: 2, label: 'ロケット噴射で火星周回へ', techs: [], capture: true },
-  { id: 'maero',    from: 'mars_approach', to: 'mars_orbit',   diff: 0, label: '空力ブレーキで火星周回へ', techs: ['HEAT'], aero: true },
-  { id: 'mflyby',   from: 'mars_approach', to: null,           diff: 0, label: '通り過ぎる(フライバイ)', techs: [], flyby: true },
-  { id: 'mland',    from: 'mars_orbit',    to: 'mars_surface', diff: null, label: '火星に着陸', techs: ['LANDING'], land: true },
-  { id: 'mascent',  from: 'mars_surface',  to: 'mars_orbit',   diff: 3, label: '火星から離陸', techs: [], surface: true },
-  { id: 'tei',      from: 'mars_orbit',    to: 'eto',          diff: 3, label: '地球帰還軌道へ噴射', techs: ['GUIDANCE'], window: 'mars', transfer: true },
-  { id: 'eentry',   from: 'earth_approach', to: 'earth',       diff: 0, label: 'そのまま大気圏再突入', techs: ['HEAT'], reentry: true },
-  { id: 'ecap',     from: 'earth_approach', to: 'leo',         diff: 2, label: 'ロケット噴射で地球周回へ', techs: [], capture: true },
+  { id: 'launch',   from: 'earth',         to: 'leo',          diff: 5, label: '打ち上げ', techs: [], surface: true,
+    hint: '発射台から、地球のまわり(低軌道)へ。打ち上げは1か月に1回。' },
+  { id: 'deorbit',  from: 'leo',           to: 'earth',        diff: 0, label: '地球へ帰る(大気圏突入)', techs: ['HEAT'], reentry: true,
+    hint: 'カプセルと探査機だけが燃え尽きずに地上へ帰れる。ロケット不要。' },
+  { id: 'tmi',      from: 'leo',           to: 'mto',          diff: 3, label: '火星へ出発', techs: ['GUIDANCE'], window: 'earth', transfer: true,
+    hint: '地球のまわりからロケットを噴射して火星へ向かう。7か月の旅。出発できるのは「火星行きのチャンス」の2か月だけ。' },
+  { id: 'mcap',     from: 'mars_approach', to: 'mars_orbit',   diff: 2, label: 'ロケットで減速して火星を回る', techs: [], capture: true,
+    hint: 'ロケットを逆向きに噴射してブレーキをかけ、火星のまわりに入る。' },
+  { id: 'maero',    from: 'mars_approach', to: 'mars_orbit',   diff: 0, label: '大気でブレーキして火星を回る', techs: ['HEAT'], aero: true,
+    hint: '火星の大気にかすめて減速する(ロケット不要)。失敗すると、シールドのない部品が壊れることがある。' },
+  { id: 'mflyby',   from: 'mars_approach', to: null,           diff: 0, label: '減速せず通り過ぎる', techs: [], flyby: true,
+    hint: '船は二度と戻れない。無人の探査機を使い捨てるときだけ。' },
+  { id: 'mland',    from: 'mars_orbit',    to: 'mars_surface', diff: null, label: '火星に着陸', techs: ['LANDING'], land: true,
+    hint: 'ロケットで減速しながら地表に降りる。難しさは探査機が火星のまわりに着くと分かる。' },
+  { id: 'mascent',  from: 'mars_surface',  to: 'mars_orbit',   diff: 3, label: '火星から離陸', techs: [], surface: true,
+    hint: '地表から火星のまわりへ戻る。原子力エンジン(ノヴァN)は使えない。' },
+  { id: 'tei',      from: 'mars_orbit',    to: 'eto',          diff: 3, label: '地球へ出発', techs: ['GUIDANCE'], window: 'mars', transfer: true,
+    hint: '火星のまわりから噴射して地球へ向かう。8か月の旅。出発できるのは「地球行きのチャンス」の2か月だけ。' },
+  { id: 'eentry',   from: 'earth_approach', to: 'earth',       diff: 0, label: 'そのまま大気圏に突入して帰る', techs: ['HEAT'], reentry: true,
+    hint: 'カプセルと探査機だけが燃え尽きずに地上へ帰れる。ロケット不要。' },
+  { id: 'ecap',     from: 'earth_approach', to: 'leo',         diff: 2, label: 'ロケットで減速して地球を回る', techs: [], capture: true,
+    hint: 'ロケットでブレーキをかけ、地球のまわり(低軌道)に入る。' },
 ];
 
 // 実績(初めて達成したときにごほうび)
 export const ACHIEVEMENTS = {
-  leo:          { name: '初の軌道到達',       money: 8,  rep: 5,  desc: '地球低軌道に宇宙船を届けた' },
+  leo:          { name: '初の軌道到達',       money: 8,  rep: 5,  desc: '地球のまわりに宇宙船を届けた' },
   docking:      { name: '初のドッキング',     money: 5,  rep: 3,  desc: '宇宙で2つの船をつないだ' },
   crew_orbit:   { name: '有人軌道飛行',       money: 12, rep: 8,  desc: '飛行士が軌道を回り、無事に帰った' },
   mars_flyby:   { name: '火星フライバイ',     money: 8,  rep: 5,  desc: '探査機が火星のそばを通った' },
@@ -125,9 +136,9 @@ export const DEBT_LIMIT = -15;     // これより借金が増えたら倒産
 
 // 火星の「まだ分からないこと」。探査機を送ると分かる
 export const MARS_UNKNOWNS = {
-  landDiff:  { values: [1, 2, 3], label: '着陸の難しさ', reveal: '探査機が火星の周回軌道に入ると分かる' },
+  landDiff:  { values: [1, 2, 3], label: '着陸の難しさ', reveal: '探査機が火星のまわりに着くと分かる' },
   radiation: { values: [0, 1],    label: '宇宙放射線',   reveal: '探査機が火星に着くと分かる',
-               text: ['弱い(影響なし)', '強い(遷移軌道を飛ぶたびに飛行士の健康 -1)'] },
+               text: ['弱い(影響なし)', '強い(火星・地球への航路を飛ぶたびに飛行士の健康 -1)'] },
   surface:   { values: ['safe', 'storm', 'dust'], label: '地表の環境', reveal: '探査機が火星に着陸すると分かる',
                text: { safe: '穏やか(影響なし)', storm: '砂嵐が多い(地表で毎月 25% で全員の健康 -1)', dust: '有害な塵(居住モジュールが無いと毎月健康 -1)' } },
 };

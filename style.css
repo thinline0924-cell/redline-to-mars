@@ -16,7 +16,7 @@
   --paper: #fbfaf5;
   --head: "Dela Gothic One", "M PLUS Rounded 1c", sans-serif;
   --body: "M PLUS Rounded 1c", system-ui, sans-serif;
-  --panel-w: min(440px, 40vw);
+  --panel-w: clamp(340px, 32vw, 440px);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #2d6b70; color: var(--ink); font-family: var(--body); }
@@ -175,9 +175,31 @@ details summary { cursor: pointer; margin-top: 6px; }
 .log.bad { border-color: var(--red); }
 .log.warn { border-color: var(--yellow); }
 
+/* 移動カード(条件のチェックリスト付き) */
+.moves { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.move { background: #24282c; border: 2px solid #3d4248; border-radius: 10px; padding: 9px 11px; }
+.move.can { border-color: #4f8f45; background: #22301f; }
+.move.flyby { opacity: .8; }
+.move-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.move-head b { font-size: 15px; }
+.move-head .need { font-size: 11.5px; color: var(--yellow); background: #3a3523; border-radius: 4px; padding: 1px 6px; }
+.move-head .btn { margin-left: auto; }
+.move > .small { margin-top: 4px; }
+.checks { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.checks li { display: flex; gap: 7px; align-items: flex-start; line-height: 1.45; }
+.checks .mk { flex: 0 0 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; margin-top: 1px; }
+.checks .ok { color: #b9e6b0; }
+.checks .ok .mk { background: #2f6b2a; color: #d7ffcd; }
+.checks .ng { color: #ffd1c4; }
+.checks .ng .mk { background: #8a2d22; color: #fff; }
+.checks small { display: block; color: var(--yellow); font-size: 11.5px; }
+.travel { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.travel-bar { height: 8px; background: #1c1f22; border-radius: 4px; overflow: hidden; margin-bottom: 5px; }
+.travel-bar i { display: block; height: 100%; background: linear-gradient(90deg, #3f8fe8, #e8553f); }
+
 /* ---------- 右下の状態バー(Raidborn 風) ---------- */
 .hud {
-  position: fixed; right: calc(var(--panel-w) + 14px); bottom: 14px; z-index: 4; transition: right .3s;
+  position: fixed; right: calc(var(--panel-w) + 14px); bottom: 14px; min-width: 230px !important; z-index: 4; transition: right .3s;
   background: rgba(14,16,20,.62); border-radius: 10px; padding: 8px 12px; min-width: 250px; backdrop-filter: blur(3px);
   font-family: "VT323", monospace; font-size: 19px; color: #fff; text-shadow: 0 1px 0 #000;
 }

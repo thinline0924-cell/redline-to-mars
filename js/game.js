@@ -270,27 +270,47 @@ export function autoSelect(s, craft, m) {
   return chosen.concat(best ? best.set : []);
 }
 
+export const WINDOW_NAME = { earth: '火星行きの出発チャンス', mars: '地球行きの出発チャンス' };
+// 移動の条件をチェックリストにする。ok = 満たしている、fix = 満たすにはどうすればいいか
+export function maneuverChecks(s, craft, m) {
+  const checks = [];
+  // text = 条件、bad = 満たしていないときの説明、fix = どうすればいいか
+  const add = (ok, text, bad, fix, key) => checks.push({ ok, text, bad, fix, key });
+  if (craft.loc === 'earth') {
+    const cost = money1(craftCost(craft, s));
+    add(!s.launchedThisMonth, '発射台が空いている', '発射台は今月もう使った', '次の月まで待つ(打ち上げは1か月に1回)');
+    add(craft.parts.length > 0, '部品を積んでいる', '部品がない', '部品を追加する');
+    add(s.money >= craftCost(craft, s), `打ち上げ費用 ${cost} を払える`, `お金が足りない(費用 ${cost}・手持ち ${money1(s.money)})`, 'お金がたまるまで待つか、部品を減らす');
+  } else if (!m.flyby) {
+    add(controllable(s, craft), '操縦できる(飛行士か探査機が乗っている)', '操縦する人がいない', '探査機を積む(宇宙では、探査機か飛行士の乗った船とドッキングする)');
+  }
+  for (const t of m.techs) add(owned(s, t), `「${TECHS[t].name}」を開発済み`, `「${TECHS[t].name}」が未開発`, '開発タブで開発する');
+  if (m.window) {
+    const open = windowOpen(m.window, s.month);
+    const nw = nextWindow(m.window, s.month);
+    const when = nw == null ? 'もう残っていない' : `次は ${monthLabel(nw)}(あと${nw - s.month}か月)`;
+    add(open, `${WINDOW_NAME[m.window]}の期間中(${monthLabel(s.month)})`, `${WINDOW_NAME[m.window]}を待っている:${when}`, 'その月までここで待つ(「次の月へ」で進める)', 'window');
+  }
+  const need = requiredThrust(s, craft, m);
+  const maxThrust = eligibleRockets(craft, m).reduce((a, r) => a + PARTS[r.type].thrust, 0);
+  if (need > 0) {
+    const known = !m.land || !!s.known.landDiff;
+    add(maxThrust >= need, known ? `ロケットの推力が足りる(最大 ${maxThrust} ≧ 必要 ${need})` : `ロケットの推力 最大 ${maxThrust}(必要な量は未調査)`,
+      `ロケットの推力が足りない(最大 ${maxThrust} < 必要 ${need})`,
+      craft.loc === 'earth' ? 'ロケットを足す(ただしロケットも重さになる)' : 'ロケットを積んだ船とドッキングするか、いらない部品を捨てて軽くする', 'thrust');
+  }
+  return checks;
+}
 export function maneuversFor(s, craft) {
   const list = [];
   for (const m of MANEUVERS) {
     if (m.from !== craft.loc) continue;
-    const reasons = [];
-    if (craft.loc === 'earth') {
-      if (s.launchedThisMonth) reasons.push('発射台は今月もう使いました(1か月に1回)');
-      if (!craft.parts.length) reasons.push('部品がありません');
-      if (s.money < craftCost(craft, s)) reasons.push(`お金が足りません(${money1(craftCost(craft, s))})`);
-    } else if (!m.flyby && !controllable(s, craft)) reasons.push('操縦する人(飛行士)か探査機が必要です');
-    for (const t of m.techs) if (!owned(s, t)) reasons.push(`「${TECHS[t].name}」が必要です`);
-    if (m.window === 'earth' && !windowOpen('earth', s.month)) reasons.push(`火星への窓が閉じています(次は${monthLabel(nextWindow('earth', s.month) ?? 999)})`);
-    if (m.window === 'mars' && !windowOpen('mars', s.month)) {
-      const nw = nextWindow('mars', s.month);
-      reasons.push(`地球への窓が閉じています(次は${nw == null ? 'もうありません' : monthLabel(nw)})`);
-    }
+    const checks = maneuverChecks(s, craft, m);
+    const reasons = checks.filter(c => !c.ok).map(c => c.key === 'thrust' ? `推力が足りません:${c.bad}` : c.bad);
     const diff = maneuverDiff(s, craft, m);
     const need = requiredThrust(s, craft, m);
     const maxThrust = eligibleRockets(craft, m).reduce((a, r) => a + PARTS[r.type].thrust, 0);
-    if (need > 0 && maxThrust < need) reasons.push(`推力が足りません(必要 ${need} / 最大 ${maxThrust})`);
-    list.push({ m, diff, need, maxThrust, ok: reasons.length === 0, reasons, diffKnown: !m.land || !!s.known.landDiff });
+    list.push({ m, diff, need, maxThrust, ok: reasons.length === 0, reasons, checks, diffKnown: !m.land || !!s.known.landDiff });
   }
   return list;
 }

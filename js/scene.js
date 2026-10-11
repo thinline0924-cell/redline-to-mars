@@ -55,8 +55,13 @@ export function createScene(container, handlers) {
   scene.background = new THREE.Color('#cfe3ef');
   scene.fog = new THREE.Fog('#d9cdb4', 6, 16);
   const camera = new THREE.PerspectiveCamera(58, 1, 0.02, 40);
-  const camBase = new THREE.Vector3(0, 1.46, 0.52);
-  const lookBase = new THREE.Vector3(0, 0.62, -0.5);
+  // カメラは「机の上の物がすべて画面に収まる距離」に自動で置く(画面の縦横比が変わっても見切れない)
+  const FIT_TARGET = new THREE.Vector3(0, 0.74, -0.3);
+  const FIT_DIR = new THREE.Vector3(0, 1.0, 0.82).normalize();
+  const FIT_HALF_W = 1.0, FIT_HALF_H = 0.58;
+  let fitDist = 1.5;
+  const camBase = new THREE.Vector3();
+  const lookBase = FIT_TARGET.clone();
   camera.position.copy(camBase);
 
   // ---------- 光 ----------
@@ -221,7 +226,7 @@ export function createScene(container, handlers) {
   const trackX = (m) => 120 + (m + 0.5) * ((BW - 240) / 144);
 
   // ---------- CRTモニター ----------
-  const monitor = new THREE.Group(); monitor.position.set(-0.86, DESK_Y, -0.55); monitor.rotation.y = 0.6; scene.add(monitor);
+  const monitor = new THREE.Group(); monitor.position.set(-0.74, DESK_Y, -0.72); monitor.rotation.y = 0.5; monitor.scale.setScalar(0.85); scene.add(monitor);
   const beige = flat('#d9cfae'), beigeDark = flat('#bfb38e');
   monitor.add(box(0.44, 0.36, 0.08, beige, [0, 0.27, 0.16]));
   monitor.add(mesh(new THREE.BoxGeometry(0.36, 0.3, 0.3), beigeDark, [0, 0.27, -0.03]));
@@ -232,7 +237,7 @@ export function createScene(container, handlers) {
   monitor.add(screen);
   monitor.add(box(0.03, 0.02, 0.01, '#7ed957', [0.17, 0.12, 0.2]));
   // キーボード
-  const kb = new THREE.Group(); kb.position.set(-0.78, DESK_Y, 0.04); kb.rotation.y = 0.7; kb.scale.setScalar(0.85); scene.add(kb);
+  const kb = new THREE.Group(); kb.position.set(-0.64, DESK_Y, -0.04); kb.rotation.y = 0.75; kb.scale.setScalar(0.72); scene.add(kb);
   kb.add(box(0.42, 0.025, 0.15, beige, [0, 0.012, 0]));
   for (let r = 0; r < 4; r++) for (let k = 0; k < 12; k++) kb.add(box(0.026, 0.012, 0.026, '#efe8d2', [-0.18 + k * 0.032, 0.03, -0.05 + r * 0.033]));
   pickable(monitor, 'rd', 'コンピューター:技術開発');
@@ -254,7 +259,7 @@ export function createScene(container, handlers) {
   pickable(ib, 'help', '指示ボード:遊び方');
 
   // ---------- FAX ----------
-  const fax = new THREE.Group(); fax.position.set(0.86, DESK_Y, -0.42); fax.rotation.y = -0.6; scene.add(fax);
+  const fax = new THREE.Group(); fax.position.set(0.76, DESK_Y, -0.52); fax.rotation.y = -0.55; fax.scale.setScalar(0.9); scene.add(fax);
   fax.add(box(0.3, 0.1, 0.26, beige, [0, 0.05, 0]));
   fax.add(box(0.3, 0.05, 0.12, beigeDark, [0, 0.115, -0.07], [0.35, 0, 0]));
   const faxLabel = canvasTex(256, 64);
@@ -269,7 +274,7 @@ export function createScene(container, handlers) {
   pickable(fax, 'fax', 'FAX:届いた書類');
 
   // ---------- 次の月へボタン・カレンダー ----------
-  const btn = new THREE.Group(); btn.position.set(0.6, DESK_Y, 0.1); btn.scale.setScalar(0.8); scene.add(btn);
+  const btn = new THREE.Group(); btn.position.set(0.42, DESK_Y, 0.1); btn.scale.setScalar(0.7); scene.add(btn);
   btn.add(mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.04, 10), flat('#5b5e63'), [0, 0.02, 0]));
   const cap = mesh(new THREE.CylinderGeometry(0.058, 0.062, 0.035, 10), new THREE.MeshStandardMaterial({ color: '#57c24a', emissive: '#1f6b18', emissiveIntensity: 0.4, flatShading: true }), [0, 0.055, 0]);
   btn.add(cap);
@@ -277,7 +282,7 @@ export function createScene(container, handlers) {
   { const g = btnLabel.g; g.fillStyle = '#e9e3cf'; g.fillRect(0, 0, 256, 64); g.fillStyle = '#2a2a2a'; g.font = `bold 34px ${HEAD}`; g.textAlign = 'center'; g.fillText('次の月へ', 128, 46); }
   btn.add(mesh(new THREE.PlaneGeometry(0.13, 0.032), new THREE.MeshBasicMaterial({ map: btnLabel.t }), [0, 0.001, 0.105], [-Math.PI / 2, 0, 0]));
   pickable(btn, 'next', '大きなボタン:次の月へ');
-  const cal = new THREE.Group(); cal.position.set(0.86, DESK_Y, -0.02); cal.rotation.y = -0.6; cal.scale.setScalar(0.9); scene.add(cal);
+  const cal = new THREE.Group(); cal.position.set(0.66, DESK_Y, -0.06); cal.rotation.y = -0.6; cal.scale.setScalar(0.8); scene.add(cal);
   const calTex = canvasTex(256, 200);
   const calGeo = new THREE.BoxGeometry(0.16, 0.12, 0.012);
   const calFace = mesh(calGeo, [flat('#ddd'), flat('#ddd'), flat('#ddd'), flat('#ddd'), new THREE.MeshLambertMaterial({ map: calTex.t }), flat('#ddd')], [0, 0.06, 0], [-0.35, 0, 0]);
@@ -292,13 +297,13 @@ export function createScene(container, handlers) {
   }
 
   // ---------- 電話・マグ・マニュアル・ライト ----------
-  const phone = new THREE.Group(); phone.position.set(-0.5, DESK_Y, 0.12); phone.scale.setScalar(0.8); phone.rotation.y = 0.3; scene.add(phone);
+  const phone = new THREE.Group(); phone.position.set(-0.4, DESK_Y, 0.12); phone.scale.setScalar(0.7); phone.rotation.y = 0.3; scene.add(phone);
   phone.add(box(0.16, 0.05, 0.13, '#c0392b', [0, 0.025, 0]));
   phone.add(box(0.2, 0.035, 0.05, '#a93226', [0, 0.07, 0]));
   phone.add(box(0.05, 0.03, 0.06, '#a93226', [-0.08, 0.06, 0])); phone.add(box(0.05, 0.03, 0.06, '#a93226', [0.08, 0.06, 0]));
   phone.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.008, 10), flat('#eee'), [0, 0.052, 0.02]));
   pickable(phone, 'crew', '電話:飛行士の採用');
-  const mug = new THREE.Group(); mug.position.set(-0.86, DESK_Y, -0.2); scene.add(mug);
+  const mug = new THREE.Group(); mug.position.set(0.64, DESK_Y, 0.16); scene.add(mug);
   mug.add(mesh(new THREE.CylinderGeometry(0.035, 0.032, 0.09, 8), flat('#f4f4f4'), [0, 0.045, 0]));
   mug.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.005, 8), flat('#4a2c1a'), [0, 0.085, 0]));
   mug.add(mesh(new THREE.TorusGeometry(0.02, 0.006, 4, 8), flat('#f4f4f4'), [0.04, 0.045, 0], [0, 0, Math.PI / 2]));
@@ -374,15 +379,15 @@ export function createScene(container, handlers) {
       g.fillStyle = color; g.beginPath(); g.arc(p[0], p[1], 44, 0, 7); g.globalAlpha = 0.35; g.fill(); g.globalAlpha = 1;
       g.lineWidth = 6; g.stroke();
     };
-    label(NODE_PX.earth, '地球・発射場', '#7ed957', '難しさ 5');
-    label(NODE_PX.leo, '地球低軌道', '#5a8fd8', '再突入:耐熱', true);
-    label(NODE_PX.mars_orbit, '火星周回軌道', '#d9734a', s?.landKnown ? `着陸 ${s.landDiff}` : '着陸 ?', true);
-    label(NODE_PX.mars_surface, '火星の地表', '#d9734a', '離陸 3');
-    label(NODE_PX.mars_approach, '火星接近', '#f2c94c', '減速 2/空力');
-    label(NODE_PX.earth_approach, '地球接近', '#f2c94c', '減速 2/再突入');
+    label(NODE_PX.earth, '発射場', '#7ed957', '打ち上げ 難しさ5');
+    label(NODE_PX.leo, '地球のまわり', '#5a8fd8', '帰還:耐熱シールド', true);
+    label(NODE_PX.mars_orbit, '火星のまわり', '#d9734a', s?.landKnown ? `着陸 難しさ${s.landDiff}` : '着陸 難しさ?', true);
+    label(NODE_PX.mars_surface, '火星の地表', '#d9734a', '離陸 難しさ3');
+    label(NODE_PX.mars_approach, '火星に接近', '#f2c94c', '減速 2/大気0');
+    label(NODE_PX.earth_approach, '地球に接近', '#f2c94c', '突入/減速 2');
     g.font = `bold 34px ${HEAD}`; g.textAlign = 'center';
-    g.fillStyle = s?.earthOpen ? '#7ed957' : '#aab4e0'; g.fillText(s?.earthOpen ? '▶ 火星への窓 OPEN(難しさ3・7か月)' : '火星へ(難しさ3・7か月)', 1024, 200);
-    g.fillStyle = s?.marsOpen ? '#f2a65a' : '#aab4e0'; g.fillText(s?.marsOpen ? '◀ 地球への窓 OPEN(難しさ3・8か月)' : '地球へ(難しさ3・8か月)', 1024, 1140);
+    g.fillStyle = s?.earthOpen ? '#7ed957' : '#aab4e0'; g.fillText(s?.earthOpen ? '▶ 今、火星へ出発できる!(難しさ3・7か月)' : '火星への航路(難しさ3・7か月)', 1024, 200);
+    g.fillStyle = s?.marsOpen ? '#f2a65a' : '#aab4e0'; g.fillText(s?.marsOpen ? '◀ 今、地球へ出発できる!(難しさ3・8か月)' : '地球への航路(難しさ3・8か月)', 1024, 1140);
     g.font = `bold 60px ${HEAD}`; g.fillStyle = 'rgba(217,207,174,0.18)'; g.fillText('REDLINE TO MARS', 1024, 660);
     boardTex.t.needsUpdate = true;
   }
@@ -470,7 +475,7 @@ export function createScene(container, handlers) {
   }
   el.addEventListener('pointermove', (e) => {
     setMouse(e);
-    if (e.pointerType === 'mouse') { look.tx = mouse.x * 0.32; look.ty = mouse.y * 0.16; }
+    if (e.pointerType === 'mouse') { look.tx = mouse.x * 0.18; look.ty = mouse.y * 0.12; }
     const o = pick();
     hovered = o;
     el.style.cursor = o ? 'pointer' : 'default';
@@ -478,13 +483,16 @@ export function createScene(container, handlers) {
   });
   el.addEventListener('pointerleave', () => { handlers.onHover?.(null); look.tx = 0; look.ty = 0; });
   el.addEventListener('click', (e) => { setMouse(e); const o = pick(); if (o) handlers.onPick?.(o.userData.action); });
-  el.addEventListener('wheel', (e) => { zoomT = Math.max(-0.2, Math.min(0.6, zoomT - e.deltaY * 0.001)); e.preventDefault(); }, { passive: false });
+  el.addEventListener('wheel', (e) => { zoomT = Math.max(0, Math.min(0.6, zoomT - e.deltaY * 0.001)); e.preventDefault(); }, { passive: false });
   function setZoom(v) { zoomT = v; }
 
   function resize() {
     const w = container.clientWidth, h = container.clientHeight;
     renderer.setSize(w, h, false); camera.aspect = w / h;
-    camera.fov = w / h < 0.8 ? 74 : w / h < 1.2 ? 62 : 54;
+    camera.fov = 50;
+    const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    fitDist = Math.max(FIT_HALF_W / (tv * camera.aspect), FIT_HALF_H / tv, 1.1);
+    camBase.copy(FIT_TARGET).addScaledVector(FIT_DIR, fitDist);
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize); resize();
@@ -497,8 +505,9 @@ export function createScene(container, handlers) {
     zoom += (zoomT - zoom) * Math.min(1, dt * 5);
     // 少しだけ呼吸するように揺れる
     const bob = Math.sin(t * 0.8) * 0.003;
-    camera.position.set(camBase.x + look.x * 0.15, camBase.y + bob - zoom * 0.35, camBase.z - zoom * 0.55);
-    tmpLook.set(lookBase.x + look.x * 1.2, lookBase.y + look.y * 1.4 - zoom * 0.05, lookBase.z);
+    camera.position.copy(camBase).addScaledVector(FIT_DIR, -zoom * fitDist * 0.55);
+    camera.position.y += bob; camera.position.x += look.x * 0.1;
+    tmpLook.set(lookBase.x + look.x * 0.6, lookBase.y + look.y * 0.8, lookBase.z);
     camera.lookAt(tmpLook);
     earth.rotation.y += dt * 0.3; mars.rotation.y += dt * 0.22;
     for (const pc of pieces.values()) {

@@ -43,13 +43,26 @@ function hint(earthOpen, marsOpen) {
   if (S.gameOver) return { title: S.gameOver.win ? 'MISSION COMPLETE!' : 'PROGRAM CANCELED', sub: S.gameOver.win ? '火星からの生還に成功!' : S.gameOver.reason };
   if (S.pendingEvent) return { title: 'FAXが届いています!', sub: 'FAX(または「次の月へ」)をクリックして、書類に答えよう' };
   const ap = G.approachingCrafts(S);
-  if (ap.length) return { title: `${ap[0].name}が${ap[0].loc === 'mars_approach' ? '火星' : '地球'}に接近中!`, sub: '今月中に減速しないと、通り過ぎてしまう' };
-  if (!S.research.length && !Object.values(S.techs).some(t => t.owned)) return { title: 'まずは技術開発!', sub: 'コンピューターで「液体燃料エンジン」などの開発を始めよう' };
-  if (earthOpen) return { title: '火星への窓が開いている!', sub: '地球低軌道から火星遷移軌道へ噴射できる(2か月間)' };
-  if (marsOpen) return { title: '地球への窓が開いている!', sub: '火星周回軌道から地球帰還軌道へ噴射できる(2か月間)' };
+  if (ap.length) return { title: `${ap[0].name}が${ap[0].loc === 'mars_approach' ? '火星' : '地球'}に接近中!`, sub: '「宇宙船」タブで今月中に減速しよう。しないと通り過ぎてしまう' };
+  const waiting = S.crafts.filter(c => c.loc === 'leo' || c.loc === 'mars_orbit');
+  if (earthOpen && waiting.some(c => c.loc === 'leo')) return { title: '今が火星へ出発するチャンス!', sub: `地球のまわりの船は「宇宙船」タブの「火星へ出発」で旅立てる(${G.monthLabel(S.month)}・2か月間だけ)` };
+  if (marsOpen && waiting.some(c => c.loc === 'mars_orbit')) return { title: '今が地球へ出発するチャンス!', sub: '火星のまわりの船は「地球へ出発」で帰れる(2か月間だけ)' };
+  const g = goal();
+  return { title: g[0], sub: g[1] };
+}
+// 次の目標(進み具合に合わせて案内する)
+function goal() {
   const ne = G.nextWindow('earth', S.month);
-  const left = G.deadline(S) - S.month;
-  return { title: '準備ができたら次の月へ', sub: `次の火星への窓:${ne == null ? 'なし' : G.monthLabel(ne)} ・ 期限まで あと${left}か月` };
+  const chance = ne == null ? '火星行きの出発チャンスはもうない' : `次の火星行きチャンス:${G.monthLabel(ne)}${ne > S.month ? `(あと${ne - S.month}か月)` : '(今!)'}`;
+  const a = S.achievements, has = (t) => G.owned(S, t), doing = (t) => S.research.some(r => r.id === t);
+  if (!has('LIQUID') && !doing('LIQUID')) return ['目標:液体燃料エンジンを開発', 'コンピューター(「開発」タブ)で開発を始めよう。宇宙へ行く最初の一歩'];
+  if (!has('LIQUID')) return ['目標:エンジンの完成を待つ', '待つ間に、地上試験の準備や、他の技術の開発を。準備ができたら「次の月へ」'];
+  if (a.leo == null) return ['目標:初めての打ち上げ', '「組立」タブで、探査機1つ+コンドル1基の船を作って打ち上げよう'];
+  if (!has('GUIDANCE') && !doing('GUIDANCE')) return ['目標:深宇宙航法を開発', '火星へ出発するのに必要な技術。' + chance];
+  if (a.mars_orbit == null) return ['目標:探査機を火星へ', `地球のまわりから「火星へ出発」。${chance}`];
+  if (!S.crew.some(c => c.status !== 'dead')) return ['目標:飛行士を採用', '電話(「飛行士」タブ)で採用。訓練に6か月かかる'];
+  if (a.crew_landing == null) return ['目標:人類を火星へ', `大きな船は宇宙で組み立てよう(ドッキング)。${chance}`];
+  return ['目標:飛行士を地球へ帰す', `${chance}・期限まで あと${G.deadline(S) - S.month}か月`];
 }
 
 // ---------- HUD(右下のバー) ----------
@@ -116,8 +129,8 @@ function panelRD() {
 
 // 飛行計画の見積もり(この船で、どこまで行けるか)
 const ROUTES = {
-  leo: { label: '地球低軌道まで', legs: ['launch'] },
-  orbit: { label: '火星周回まで', legs: ['launch', 'tmi', 'CAP'] },
+  leo: { label: '地球のまわりまで', legs: ['launch'] },
+  orbit: { label: '火星のまわりまで', legs: ['launch', 'tmi', 'CAP'] },
   landing: { label: '火星着陸まで', legs: ['launch', 'tmi', 'CAP', 'mland'] },
   round: { label: '火星往復(着陸なし)', legs: ['launch', 'tmi', 'CAP', 'tei', 'eentry'] },
   full: { label: '火星往復(着陸あり)', legs: ['launch', 'tmi', 'CAP', 'mland', 'mascent', 'tei', 'eentry'] },
@@ -183,11 +196,11 @@ function panelHangar() {
     (crewList.length ? crewList.map(c => `<button class="chip ${craft.crew.includes(c.id) ? 'on' : ''}" data-act="board" data-a="${c.id}">${esc(c.name)}<small>${ROLE_LABEL[c.role]}・健康${c.health}</small></button>`).join('') : '<span class="small">訓練の終わった飛行士がいません(電話で採用)</span>') + '</div>';
   // 見積もり
   const plan = simulatePlan(craft);
-  h += `<h3>飛行計画の見積もり</h3><div class="chips small-chips">${Object.entries(ROUTES).map(([k, r]) => `<button class="chip ${planRoute === k ? 'on' : ''}" data-act="route" data-a="${k}">${r.label}</button>`).join('')}
-    <button class="chip ${planAero ? 'on' : ''}" data-act="aero">火星での減速:${planAero ? '空力ブレーキ' : 'ロケット噴射'}</button></div>
+  h += `<h3>飛行計画の見積もり</h3><p class="small">この船で、どこまで行けるかの計算(故障がない場合)。上から順にロケットを使い捨てていく。</p><div class="chips small-chips">${Object.entries(ROUTES).map(([k, r]) => `<button class="chip ${planRoute === k ? 'on' : ''}" data-act="route" data-a="${k}">${r.label}</button>`).join('')}
+    <button class="chip ${planAero ? 'on' : ''}" data-act="aero">火星での減速:${planAero ? '大気でブレーキ' : 'ロケット'}</button></div>
     <table class="plan"><tr><th>移動</th><th>重さ</th><th>必要/最大の推力</th><th></th></tr>`;
   for (const r of plan.out) {
-    h += `<tr class="${r.pass ? 'ok' : 'ng'}"><td>${esc(r.m.label)}${r.assumed ? '<small>(難しさ不明→3で計算)</small>' : ''}</td><td>${r.mass}</td><td>${r.need} / ${r.max}</td><td>${r.missingTech.length ? `<small>要:${esc(r.missingTech.map(t => TECHS[t].name).join('・'))}</small>` : r.pass ? '✓' : '✗ 推力不足'}</td></tr>`;
+    h += `<tr class="${r.pass ? 'ok' : 'ng'}"><td>${esc(r.m.label)}${r.assumed ? '<small>(難しさ不明→3で計算)</small>' : ''}</td><td>${r.mass}</td><td>${r.need} / ${r.max}</td><td>${r.missingTech.length ? `<small>要開発:${esc(r.missingTech.map(t => TECHS[t].name).join('・'))}</small>` : r.pass ? '✓' : '✗ 推力不足'}</td></tr>`;
   }
   h += `</table>`;
   if (craft.crew.length) {
@@ -196,10 +209,7 @@ function panelHangar() {
     h += `<p class="small ${have >= sup.need ? '' : 'warn'}">補給品:この計画だと約${sup.months}か月 × ${craft.crew.length}人${sup.rate < 1 ? '×0.5(再利用)' : ''} = ${sup.need}人月 必要(積んでいるのは ${have}人月)。${G.seats(craft, 'hab') < craft.crew.length && planRoute !== 'leo' ? '<br>⚠ 居住モジュールが無いと、宇宙で3か月目から毎月健康が下がる。' : ''}</p>`;
   }
   const lo = G.maneuversFor(S, craft).find(o => o.m.id === 'launch');
-  const blockers = lo.reasons;
-  h += `<div class="row between"><button class="btn danger small" data-act="delDraft">設計を取り消す</button>
-    <button class="btn go big" data-act="burn" data-a="${craft.id}" data-b="launch" ${blockers.length ? 'disabled' : ''}>🚀 打ち上げ準備</button></div>
-    ${blockers.length ? `<p class="small warn">${blockers.map(esc).join('<br>')}</p>` : ''}`;
+  h += `<h3>打ち上げ</h3>${moveCard(craft, lo)}<div class="row"><button class="btn danger small" data-act="delDraft">この設計を取り消す</button></div>`;
   return h;
 }
 function crewLine(c) {
@@ -211,9 +221,22 @@ function partsSummary(craft, withJettison) {
   for (const p of craft.parts) (counts[p.type] ||= []).push(p);
   return Object.entries(counts).map(([t, ps]) => `<span class="pchip">${esc(PARTS[t].name)}×${ps.length}${withJettison ? `<button class="x" data-act="jettison" data-a="${craft.id}" data-b="${ps[0].uid}" title="1つ捨てる">×</button>` : ''}</span>`).join('');
 }
+// 移動1つぶんのカード:何をする移動か+条件のチェックリスト
+function moveCard(c, o) {
+  const m = o.m;
+  const thrustOnly = !o.ok && o.checks.filter(x => !x.ok).every(x => x.key === 'thrust') && !o.diffKnown;
+  const can = o.ok || thrustOnly;
+  const need = o.need > 0 ? `<span class="need">必要な推力 ${o.diffKnown ? o.need : '?'}</span>` : '<span class="need">ロケット不要</span>';
+  const checks = o.checks.map(x => `<li class="${x.ok ? 'ok' : 'ng'}"><span class="mk">${x.ok ? '✓' : '✗'}</span><span>${esc(x.ok ? x.text : x.bad)}${x.ok ? '' : `<small>→ ${esc(x.fix)}</small>`}</span></li>`).join('');
+  return `<div class="move ${can ? 'can' : ''} ${m.flyby ? 'flyby' : ''}">
+    <div class="move-head"><b>${esc(m.label)}</b>${need}<button class="btn small ${can && !m.flyby ? 'go' : ''}" data-act="burn" data-a="${c.id}" data-b="${m.id}" ${can ? '' : 'disabled'}>${can ? '実行…' : '条件が未達'}</button></div>
+    <div class="small">${esc(m.hint || '')}</div>
+    ${o.checks.length ? `<ul class="checks">${checks}</ul>` : ''}
+  </div>`;
+}
 function panelFleet() {
   const list = S.crafts.filter(c => c.loc !== 'earth');
-  let h = `<h2>宇宙船</h2><p class="lead">宇宙にいる船の操作。移動にはロケットの噴射が必要(難しさ × 重さ)。火星・地球に<b>接近した月に減速しないと通り過ぎる</b>。</p>`;
+  let h = `<h2>宇宙船</h2><p class="lead">宇宙にいる船の操作。それぞれの移動の下に<b>条件のチェックリスト</b>がある。✗ の項目を満たせば実行できる。火星・地球に<b>接近した月に減速しないと通り過ぎる</b>。</p>`;
   if (!list.length) return h + '<p class="empty">まだ宇宙に船はありません。組み立て工場で船を作って打ち上げよう。</p>';
   const order = ['earth_approach', 'mars_approach', 'leo', 'mto', 'mars_orbit', 'mars_surface', 'eto'];
   list.sort((a, b) => order.indexOf(a.loc) - order.indexOf(b.loc));
@@ -225,22 +248,22 @@ function panelFleet() {
       <div class="small">重さ ${G.craftMass(c)}・補給品 ${G.supplyLeft(c)}人月${G.controllable(S, c) ? '' : '・<span class="warn">操縦できない(探査機も飛行士もいない)</span>'}</div>
       <div class="parts">${partsSummary(c, !NODES[c.loc].transit)}</div>
       ${crew.length ? `<div class="crew">${crew.map(crewLine).join('')}</div>` : ''}`;
-    if (!NODES[c.loc].transit) {
-      h += `<div class="actions">`;
-      for (const o of G.maneuversFor(S, c)) {
-        const blk = o.reasons.filter(r => !r.startsWith('推力が足りません'));
-        const label = `${o.m.label}${o.need > 0 ? `(必要推力 ${o.diffKnown ? o.need : '?'})` : ''}`;
-        h += `<button class="btn ${o.ok ? 'go' : ''} small" data-act="burn" data-a="${c.id}" data-b="${o.m.id}" ${blk.length ? `disabled title="${esc(blk.join(' / '))}"` : ''}>${esc(label)}</button>`;
-      }
+    if (NODES[c.loc].transit) {
+      const total = c.loc === 'mto' ? TRANSIT_TO_MARS : TRANSIT_TO_EARTH;
+      const left = c.arrive - S.month;
+      h += `<div class="travel"><div class="travel-bar"><i style="width:${Math.round((1 - left / total) * 100)}%"></i></div><span>${c.loc === 'mto' ? '火星' : '地球'}まで あと${left}か月(${esc(G.monthLabel(c.arrive))}に到着)。到着した月に減速の操作をする。</span></div>`;
+    } else {
+      h += `<div class="moves">`;
+      for (const o of G.maneuversFor(S, c)) h += moveCard(c, o);
+      h += `</div>`;
       const mates = S.crafts.filter(x => x !== c && x.loc === c.loc);
+      const extra = [];
       for (const x of mates) {
         const why = G.canDock(S, c, x);
-        h += `<button class="btn small" data-act="dock" data-a="${c.id}" data-b="${x.id}" ${why ? `disabled title="${esc(why)}"` : ''}>${esc(x.name)}とドッキング</button>`;
+        extra.push(`<button class="btn small" data-act="dock" data-a="${c.id}" data-b="${x.id}" ${why ? 'disabled' : ''}>${esc(x.name)}とドッキング</button>${why ? `<span class="small">${esc(why)}</span>` : ''}`);
       }
-      if (c.parts.length > 1) { const why = G.canSplit(S, c); h += `<button class="btn small" data-act="splitDlg" data-a="${c.id}" ${why ? `disabled title="${esc(why)}"` : ''}>切り離す…</button>`; }
-      h += `</div>`;
-      const blocked = G.maneuversFor(S, c).filter(o => o.reasons.length && !o.reasons.every(r => r.startsWith('推力')));
-      if (blocked.length) h += `<details class="small"><summary>できない移動の理由</summary>${blocked.map(o => `<div>・${esc(o.m.label)}:${esc(o.reasons.join(' / '))}</div>`).join('')}</details>`;
+      if (c.parts.length > 1) { const why = G.canSplit(S, c); extra.push(`<button class="btn small" data-act="splitDlg" data-a="${c.id}" ${why ? 'disabled' : ''}>切り離す…</button>${why ? `<span class="small">${esc(why)}</span>` : ''}`); }
+      if (extra.length) h += `<div class="actions">${extra.join('')}</div>`;
     }
     h += `</div>`;
   }
@@ -263,9 +286,9 @@ function panelLog() {
     const text = S.known[k] ? (k === 'landDiff' ? `難しさ ${v}` : u.text[v]) : `? (${u.reveal})`;
     h += `<li><b>${esc(u.label)}</b>:${esc(text)}</li>`;
   }
-  h += `</ul><h3>打ち上げの窓</h3><table class="plan"><tr><th>地球 → 火星</th><th>火星 → 地球</th></tr>`;
+  h += `</ul><h3>出発チャンスの予定</h3><p class="small">惑星の位置の関係で、火星への旅に出られるのは約26か月ごとの2か月間だけ。</p><table class="plan"><tr><th>火星行き(地球を出発)</th><th>地球行き(火星を出発)</th></tr>`;
   for (const w of EARTH_WINDOWS) h += `<tr class="${w + 1 < S.month ? 'past' : ''}"><td>${G.monthLabel(w)}〜</td><td>${G.monthLabel(w + RETURN_OFFSET)}〜</td></tr>`;
-  h += `</table><p class="small">期限:${G.monthLabel(G.deadline(S))}。遷移軌道は火星まで${TRANSIT_TO_MARS}か月、地球まで${TRANSIT_TO_EARTH}か月。</p><h3>実績</h3><div class="ach">`;
+  h += `</table><p class="small">期限:${G.monthLabel(G.deadline(S))}。火星までの旅は${TRANSIT_TO_MARS}か月、地球までは${TRANSIT_TO_EARTH}か月。</p><h3>実績</h3><div class="ach">`;
   for (const [k, a] of Object.entries(ACHIEVEMENTS)) h += `<div class="achi ${S.achievements[k] != null ? 'got' : ''}"><b>${esc(a.name)}</b><small>${esc(a.desc)}・${m1(a.money)}・★+${a.rep}${S.achievements[k] != null ? `・${G.monthLabel(S.achievements[k])}` : ''}</small></div>`;
   h += `</div><h3>できごと</h3><div class="logs">${S.log.slice(0, 60).map(l => `<div class="log ${l.kind}"><small>${esc(G.monthLabel(l.m))}</small>${esc(l.text)}</div>`).join('')}</div>`;
   return h;
@@ -391,8 +414,8 @@ function showHelp() {
   <h3>1か月の流れ</h3><p>好きなだけ操作したら、机の上の<b>緑の大きなボタン</b>(または左下の「次の月へ」)で月を進めます。月末に開発が進み、補給品が減り、お金が入ります。ときどきFAXで出来事が届きます。</p>
   <h3>技術とカード(いちばん大事)</h3><p>技術が完成すると、見えない<b>信頼性カード</b>(ふつう3枚)が付きます。ロケットを噴射するたび、着陸・再突入のたびにカードを1枚引き、<b>成功/軽い故障/重大な故障</b>が決まります。地上試験($1.5M・チーム1つを1か月)でカードを引いて正体を調べ、見つけた欠陥はお金を払って取り除けます。カードが無くなった技術は必ず成功します。<br>→ テストにお金と時間をかけるか、危険を承知で急ぐか。それがこのゲームの悩みどころです。</p>
   <h3>ロケットと推力</h3><p>移動に必要な推力 = <b>難しさ × 船の重さ</b>。重さには、まだ使っていないロケット自身も入ります。使ったロケットは捨てられて軽くなります(ノヴァNは何度でも使える)。<br>
-  難しさ:打ち上げ 5/火星遷移 3/火星での減速 2(耐熱シールドで空力ブレーキなら0)/着陸 ?(1〜3、探査機で調べる)/離陸 3/地球帰還 3/再突入 0(耐熱シールド)</p>
-  <h3>窓と旅</h3><p>火星へは約26か月ごとに2か月だけ開く<b>窓</b>のときしか出発できません。片道7〜8か月。到着した月に減速しないと通り過ぎてしまいます。帰りの窓は、行きの窓の21か月後です。</p>
+  難しさ:打ち上げ 5/火星へ出発 3/火星での減速 2(耐熱シールドで大気ブレーキなら0)/着陸 ?(1〜3、探査機で調べる)/離陸 3/地球へ出発 3/大気圏突入 0(耐熱シールド)</p>
+  <h3>出発チャンスと旅</h3><p>惑星は動いているので、火星へは約26か月ごとに2か月だけある<b>出発チャンス</b>のときしか出発できません(ボード上端の年表の緑のマス)。片道7〜8か月。到着した月に減速しないと通り過ぎてしまいます。帰りのチャンスは、行きのチャンスの21か月後です(オレンジのマス)。</p>
   <h3>宇宙での組み立て</h3><p>重い船は一度に打ち上げられません。「ランデブー・ドッキング」で軌道上でつなぎ合わせましょう。火星では、帰りの船を軌道に残し、軽い着陸船だけ降ろす作戦も有効です(切り離し)。</p>
   <h3>飛行士</h3><p>カプセル(2席・再突入できる)で打ち上げ、居住モジュール(3席)で長旅をします。居住モジュールが無いと3か月目から毎月健康が下がります。補給品は1人1か月に1人月(閉鎖型生命維持で半分)。操縦士・技師・医師の技能も活かしましょう。</p>
   <h3>お金と支持率</h3><p>毎月の収入は支持率で増えます。実績を上げると報奨金と支持率が入ります。1年間何も実績がないと関心が薄れます。<b>支持率 0、借金 $15M 超、期限切れ</b>でゲームオーバー。</p>
