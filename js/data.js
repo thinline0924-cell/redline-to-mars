@@ -8,14 +8,14 @@ export const DIFFICULTY = {
   normal: {
     label: '標準',
     note: '2001年12月までに、火星に降り立った飛行士を地球へ帰す',
-    money: 30, rep: 40, baseIncome: 3.4,
+    money: 30, rep: 40, baseIncome: 4.2,
     deadline: 143,               // 0 = 1990年1月
     card: { S: 0.42, m: 0.36, M: 0.22 },
   },
   hard: {
     label: 'ハード',
     note: '2000年12月(千年紀の終わり)まで。資金も少なく、部品の故障も多い',
-    money: 20, rep: 35, baseIncome: 2.5,
+    money: 20, rep: 35, baseIncome: 4.2,
     deadline: 131,
     card: { S: 0.32, m: 0.40, M: 0.28 },
   },

@@ -36,11 +36,11 @@
     <div class="frame">
       <div class="lamps"><i></i><i></i></div>
       <nav class="tabs">
-        <button class="tab" data-act="tab" data-a="rd">開発</button>
-        <button class="tab" data-act="tab" data-a="hangar">組立<span class="badge" hidden></span></button>
-        <button class="tab" data-act="tab" data-a="fleet">宇宙船<span class="badge" hidden></span></button>
-        <button class="tab" data-act="tab" data-a="crew">飛行士</button>
-        <button class="tab" data-act="tab" data-a="log">記録</button>
+        <button class="tab" data-act="tab" data-a="rd"><i>🔬</i>開発<kbd>1</kbd></button>
+        <button class="tab" data-act="tab" data-a="hangar"><i>🛠</i>組立<kbd>2</kbd><span class="badge" hidden></span></button>
+        <button class="tab" data-act="tab" data-a="fleet"><i>🚀</i>宇宙船<kbd>3</kbd><span class="badge" hidden></span></button>
+        <button class="tab" data-act="tab" data-a="crew"><i>👩‍🚀</i>飛行士<kbd>4</kbd></button>
+        <button class="tab" data-act="tab" data-a="log"><i>📋</i>記録<kbd>5</kbd></button>
       </nav>
       <div id="panelBody" class="chalk"></div>
       <div class="frame-foot"><span class="vents"></span><span>MISSION CONTROL TERMINAL</span><span class="vents"></span></div>
@@ -52,7 +52,7 @@
 
   <!-- 左下のボタン -->
   <div class="dock">
-    <button id="nextBtn" class="next-btn">次の月へ ▶</button>
+    <button id="nextBtn" class="next-btn" title="キーボードの N でも進めます">次の月へ ▶</button>
     <div class="dock-sub">
       <button id="helpBtn" class="ghost">? 遊び方</button>
       <button id="soundBtn" class="ghost">♪ 音</button>
@@ -73,7 +73,7 @@
         <div class="title-btns">
           <button id="continueBtn" class="btn go big" hidden>続きから</button>
           <button class="btn go big" data-new="normal">新しく始める<small>標準:2001年12月まで</small></button>
-          <button class="btn big" data-new="hard">ハードで始める<small>2000年12月まで・資金少なめ</small></button>
+          <button class="btn big" data-new="hard">ハードで始める<small>2000年12月まで・最初の資金が少なく故障も多い</small></button>
           <button id="titleHelp" class="btn">遊び方</button>
         </div>
       </div>

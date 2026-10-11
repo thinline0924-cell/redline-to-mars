@@ -491,7 +491,9 @@ export function createScene(container, handlers) {
     renderer.setSize(w, h, false); camera.aspect = w / h;
     camera.fov = 50;
     const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    fitDist = Math.max(FIT_HALF_W / (tv * camera.aspect), FIT_HALF_H / tv, 1.1);
+    // 縦長の画面(スマホ)では机全体ではなく、ボードが大きく見える距離にする
+    const halfW = camera.aspect < 1 ? 0.66 : FIT_HALF_W;
+    fitDist = Math.max(halfW / (tv * camera.aspect), FIT_HALF_H / tv, 1.1);
     camBase.copy(FIT_TARGET).addScaledVector(FIT_DIR, fitDist);
     camera.updateProjectionMatrix();
   }

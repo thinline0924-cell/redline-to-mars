@@ -540,8 +540,8 @@ export function dock(s, aId, bId) {
   const why = canDock(s, a, b); if (why) return { ok: false, msg: why };
   const report = { lines: [], draws: [], outcome: 'ok', craftId: a.id };
   if (a.loc !== 'mars_surface') {
-    a.dockTried = b.dockTried = s.month;
     const d = drawCard(s, 'RENDEZVOUS'); report.draws.push(d);
+    if (d.t !== 'S') a.dockTried = b.dockTried = s.month;   // 失敗したときだけ、その月はもう試せない
     if (d.t === 'm') { report.lines.push('接近に失敗。来月もう一度やってみよう。'); report.outcome = 'fail'; return { ok: true, report }; }
     if (d.t === 'M') {
       report.lines.push('衝突してしまった!');
@@ -670,14 +670,14 @@ export function endMonth(s) {
 
   // お金
   const d = DIFFICULTY[s.difficulty];
-  let income = d.baseIncome + Math.max(0, s.rep) * 0.04;
+  let income = d.baseIncome + Math.max(0, s.rep) * 0.05;
   if (s.mods.incomeCutUntil > s.month) income -= 1;
   if (s.mods.mourningUntil > s.month) income -= 1.5;
   const salary = s.teams * TEAM_COST + s.crew.filter(c => c.status !== 'dead').length * CREW_SALARY;
   s.money += income - salary;
   summary.income = income; summary.salary = salary;
   // 世間の関心
-  if (s.month - s.lastAchMonth >= 12) { s.rep -= 0.5; }
+  if (s.month - s.lastAchMonth >= 18) { s.rep -= 0.5; }
   s.rep = Math.min(100, s.rep);
 
   s.month++;

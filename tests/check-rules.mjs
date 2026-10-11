@@ -58,7 +58,7 @@ function launchStack(s, d) {
   const big = G.owned(s, 'HEAVY') ? 'GOLIATH' : 'CONDOR';
   addN(s, d, big, rocketsFor(5, G.craftMass(d), big));
   const o = G.maneuversFor(s, d).find(x => x.m.id === 'launch');
-  if (!o.ok) return null;
+  if (!o.ok) { G.deleteDraft(s, d.id); return null; }
   const r = G.performManeuver(s, d.id, 'launch', G.autoSelect(s, d, o.m));
   return r.report.outcome === 'ok' ? G.getCraft(s, d.id) : null;
 }
@@ -71,7 +71,7 @@ const deckClean = (s, t) => G.owned(s, t) && s.techs[t].cards.every(c => c.known
 
 function botPlay(seed, difficulty) {
   const s = G.createGame({ seed, difficulty });
-  const plan = ['LIQUID', 'GUIDANCE', 'HEAT', 'LIFE', 'HEAVY', 'LANDING', 'RENDEZVOUS', 'RECYCLE'];
+  const plan = ['LIQUID', 'GUIDANCE', 'HEAT', 'HEAVY', 'LANDING', 'LIFE', 'RENDEZVOUS', 'RECYCLE'];
   const needed = ['LIQUID', 'GUIDANCE', 'HEAT', 'LIFE', 'HEAVY', 'LANDING', 'RENDEZVOUS'];
   const mission = { stage: 'prep' };
   for (let guard = 0; guard < 400 && !s.gameOver; guard++) {
@@ -89,7 +89,7 @@ function botPlay(seed, difficulty) {
       if (!G.owned(s, t)) continue;
       s.techs[t].cards.forEach((c, i) => { if (c.known && c.t !== 'S' && s.money - G.fixCost(s, c.t) > reserve) G.fixCard(s, t, i); });
       for (let k = s.techs[t].cards.length - 1; k >= 0; k--) { const c = s.techs[t].cards[k]; if (c.known && c.t !== 'S' && s.money > G.fixCost(s, c.t) + 2) G.fixCard(s, t, k); }
-      while (s.techs[t].cards.some(c => !c.known) && s.money > reserve + 2 && !G.canTest(s, t)) {
+      while (s.techs[t].cards.some(c => !c.known) && s.money > 20 && !G.canTest(s, t)) {
         const r = G.groundTest(s, t);
         if (r.draw.t !== 'S' && s.money > G.fixCost(s, r.draw.t)) G.fixCard(s, t, r.draw.idx);
       }
@@ -97,7 +97,7 @@ function botPlay(seed, difficulty) {
     if (s.crew.length < 2 && s.month >= 40) { G.hireCrew(s, 0); G.hireCrew(s, 1); }
 
     // 実績:まず軌道へ
-    if (G.owned(s, 'LIQUID') && s.achievements.leo == null && !s.launchedThisMonth && s.money > 15) {
+    if (G.owned(s, 'LIQUID') && s.achievements.leo == null && !s.launchedThisMonth && s.money > 10 && s.techs.LIQUID.cards.every(c => c.known)) {
       const d = G.newDraft(s); G.addPart(s, d.id, 'PROBE'); G.addPart(s, d.id, 'CONDOR');
       const o = G.maneuversFor(s, d).find(x => x.m.id === 'launch');
       if (o.ok) G.performManeuver(s, d.id, 'launch', G.autoSelect(s, d, o.m)); else G.deleteDraft(s, d.id);
@@ -120,33 +120,40 @@ function botPlay(seed, difficulty) {
     // 有人の火星往還
     const ready = needed.every(t => G.owned(s, t));
     const w = EARTH_WINDOWS.find(x => x >= s.month && x + RETURN_OFFSET + 10 <= G.deadline(s));
-    if (ready && mission.stage === 'prep' && w != null && w - s.month <= 4 && s.crew.filter(c => G.crewReady(s, c)).length >= 2 && deckClean(s, 'HEAT')) {
-      mission.stage = 'build'; mission.w = w; mission.pieces = [];
-    }
-    if (mission.stage === 'build' && !s.launchedThisMonth) {
+    // 部品の構成と費用を見積もる
+    const planLayout = () => {
       const ld = s.known.landDiff ? s.mars.landDiff : 3;
       const rate = G.owned(s, 'RECYCLE') ? 0.5 : 1;
       const crates = (m) => Math.ceil((m * 2 * rate) / 6);
-      // 部品の構成を計算する
-      if (!mission.layout) {
-        let lander = 2 + crates(3);
-        lander += PARTS.CONDOR.mass * rocketsFor(3, lander, 'CONDOR'); const ascent = rocketsFor(3, 2 + crates(3), 'CONDOR');
-        const landN = rocketsFor(ld, lander, 'CONDOR'); lander += 3 * landN;
-        let orbiter = 1 + 4 + crates(26);
-        const teiN = rocketsFor(3, orbiter, 'CONDOR'); orbiter += 3 * teiN;
-        const stack = lander + orbiter;
-        const tmiN = rocketsFor(3, stack, 'CONDOR');
-        mission.layout = { ascent, landN, teiN, tmiN, landCr: crates(3), orbCr: crates(26) };
-      }
+      let lander = 2 + crates(3);
+      const ascent = rocketsFor(3, lander, 'CONDOR'); lander += 3 * ascent;
+      const landN = rocketsFor(ld, lander, 'CONDOR'); lander += 3 * landN;
+      let orbiter = 1 + 4 + crates(26);
+      const teiN = rocketsFor(3, orbiter, 'CONDOR'); orbiter += 3 * teiN;
+      const tmiN = rocketsFor(3, lander + orbiter, 'CONDOR');
+      const L = { ascent, landN, teiN, tmiN, landCr: crates(3), orbCr: crates(26) };
+      const lift = (mass) => 12 * rocketsFor(5, mass, 'GOLIATH');
+      let cost = 3 + 10 + L.orbCr + 5 * teiN + lift(1 + 4 + L.orbCr + 3 * teiN);
+      for (let left = tmiN; left > 0; left -= 6) { const n = Math.min(6, left); cost += 5 * n + lift(3 * n); }
+      cost += 6 + L.landCr + 5 * (ascent + landN) + lift(2 + L.landCr + 3 * (ascent + landN));
+      L.cost = cost; L.launches = 2 + Math.ceil(tmiN / 6);
+      return L;
+    };
+    if (ready && mission.stage === 'prep' && w != null && s.crew.filter(c => G.crewReady(s, c)).length >= 2 && deckClean(s, 'HEAT')) {
+      const L = planLayout();
+      if (w - s.month <= L.launches && w - s.month >= L.launches - 1 && s.money >= L.cost + 5) { mission.stage = 'build'; mission.w = w; mission.pieces = []; mission.layout = L; }
+    }
+    if (mission.stage === 'build' && s.month > mission.w + 1) mission.stage = 'abort';
+    if (mission.stage === 'build' && !s.launchedThisMonth) {
       const L = mission.layout;
       if (!mission.core) {
         const d = G.newDraft(s); G.addPart(s, d.id, 'PROBE'); G.addPart(s, d.id, 'HAB'); addN(s, d, 'SUPPLY', L.orbCr); addN(s, d, 'CONDOR', L.teiN);
-        const c = s.money > G.craftCost(d, s) + 40 ? launchStack(s, d) : (G.deleteDraft(s, d.id), null);
+        const c = launchStack(s, d);
         if (c) mission.core = c.id;
       } else if ((mission.tmiLeft ?? L.tmiN) > 0 && s.month < mission.w) {
         const n = Math.min(mission.tmiLeft ?? L.tmiN, 6);
         const d = G.newDraft(s); addN(s, d, 'CONDOR', n);
-        const c = s.money > G.craftCost(d, s) + 30 ? launchStack(s, d) : (G.deleteDraft(s, d.id), null);
+        const c = launchStack(s, d);
         if (c) { mission.pieces.push(c.id); mission.tmiLeft = (mission.tmiLeft ?? L.tmiN) - n; }
       } else if (s.month >= mission.w && G.windowOpen('earth', s.month)) {
         const d = G.newDraft(s); G.addPart(s, d.id, 'CAPSULE'); addN(s, d, 'SUPPLY', L.landCr); addN(s, d, 'CONDOR', L.ascent + L.landN);
@@ -178,7 +185,7 @@ function botPlay(seed, difficulty) {
       else if (mission.landed && G.getCraft(s, mission.lander)?.loc === 'mars_orbit') G.dock(s, core.id, mission.lander);
       else if (core.loc === 'mars_orbit' && core.crew.length) doMove(s, core, 'tei');
     }
-    if (mission.stage === 'abort') { mission.stage = 'prep'; mission.layout = null; mission.core = null; mission.landed = false; mission.tmiLeft = undefined; }
+    if (mission.stage === 'abort') { mission.stage = 'prep'; mission.layout = null; mission.core = null; mission.landed = false; mission.tmiLeft = undefined; mission.pieces = []; }
     G.endMonth(s);
     checkInvariants(s, `bot ${seed}`);
   }
@@ -193,7 +200,8 @@ for (const diff of ['normal', 'hard']) {
     else if (s.gameOver?.reason?.includes('倒産')) broke++;
   }
   console.log(`作戦プレイ(${diff}):${N}回中 ${wins}回 勝ち(平均 ${wins ? G.monthLabel(Math.round(monthSum / wins)) : '-'})、倒産 ${broke}回`);
-  if (diff === 'normal') assert(wins >= N * 0.1, '標準でも作戦どおりに遊んで勝てない(難しすぎ)');
+  if (diff === 'normal') assert(wins >= N * 0.4, '標準でも作戦どおりに遊んで勝てない(難しすぎ)');
+  if (diff === 'hard') assert(wins >= N * 0.03 && wins <= N * 0.6, 'ハードの勝率が想定(3〜60%)から外れている');
 }
 if (failed) { console.error(`点検 NG(${failed}件)`); process.exit(1); }
 console.log('点検 OK');

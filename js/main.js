@@ -209,7 +209,12 @@ function panelHangar() {
     h += `<p class="small ${have >= sup.need ? '' : 'warn'}">補給品:この計画だと約${sup.months}か月 × ${craft.crew.length}人${sup.rate < 1 ? '×0.5(再利用)' : ''} = ${sup.need}人月 必要(積んでいるのは ${have}人月)。${G.seats(craft, 'hab') < craft.crew.length && planRoute !== 'leo' ? '<br>⚠ 居住モジュールが無いと、宇宙で3か月目から毎月健康が下がる。' : ''}</p>`;
   }
   const lo = G.maneuversFor(S, craft).find(o => o.m.id === 'launch');
-  h += `<h3>打ち上げ</h3>${moveCard(craft, lo)}<div class="row"><button class="btn danger small" data-act="delDraft">この設計を取り消す</button></div>`;
+  const ng = lo.checks.filter(x => !x.ok);
+  h += `<h3>打ち上げ</h3>${moveCard(craft, lo)}`;
+  h += `<div class="sticky-foot"><div class="sf-stats"><span>重さ <b>${mass}</b></span><span>費用 <b>${m1(cost)}</b></span><span class="${lo.maxThrust >= lo.need ? 'okc' : 'warn'}">推力 <b>${lo.maxThrust}</b>/${lo.need}</span></div>
+    <div class="sf-note ${ng.length ? 'warn' : 'okc'}">${ng.length ? `✗ ${esc(ng[0].bad)}` : '✓ 打ち上げできます'}</div>
+    <button class="btn go" data-act="burn" data-a="${craft.id}" data-b="launch" ${lo.ok ? '' : 'disabled'}>🚀 打ち上げ…</button></div>`;
+  h += `<div class="row"><button class="btn danger small" data-act="delDraft">この設計を取り消す</button></div>`;
   return h;
 }
 function crewLine(c) {
@@ -229,7 +234,7 @@ function moveCard(c, o) {
   const need = o.need > 0 ? `<span class="need">必要な推力 ${o.diffKnown ? o.need : '?'}</span>` : '<span class="need">ロケット不要</span>';
   const checks = o.checks.map(x => `<li class="${x.ok ? 'ok' : 'ng'}"><span class="mk">${x.ok ? '✓' : '✗'}</span><span>${esc(x.ok ? x.text : x.bad)}${x.ok ? '' : `<small>→ ${esc(x.fix)}</small>`}</span></li>`).join('');
   return `<div class="move ${can ? 'can' : ''} ${m.flyby ? 'flyby' : ''}">
-    <div class="move-head"><b>${esc(m.label)}</b>${need}<button class="btn small ${can && !m.flyby ? 'go' : ''}" data-act="burn" data-a="${c.id}" data-b="${m.id}" ${can ? '' : 'disabled'}>${can ? '実行…' : '条件が未達'}</button></div>
+    <div class="move-head"><div class="move-title"><b>${esc(m.label)}</b>${need}</div><button class="btn small ${can && !m.flyby ? 'go' : ''}" data-act="burn" data-a="${c.id}" data-b="${m.id}" ${can ? '' : 'disabled'}>${can ? '実行…' : '条件が未達'}</button></div>
     <div class="small">${esc(m.hint || '')}</div>
     ${o.checks.length ? `<ul class="checks">${checks}</ul>` : ''}
   </div>`;
@@ -389,6 +394,10 @@ function showEvent() {
 }
 
 function showSummary(sum) {
+  if (!sum.lines.length && !S.pendingEvent && !S.gameOver) {
+    toast(`${G.monthLabel(S.month)}へ ・ 収入 +${m1(sum.income)} ・ 給料 −${m1(sum.salary)}`, 'info');
+    return;
+  }
   const lines = sum.lines.slice();
   lines.push(`収入 ${m1(sum.income)} ・ 給料 −${m1(sum.salary)}`);
   modal(`<div class="memo-head">MONTHLY REPORT</div><div class="memo-date">${esc(G.monthLabel(sum.month))} の報告</div>
@@ -424,7 +433,7 @@ function showHelp() {
 }
 
 let toastTimer = 0;
-function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600); }
+function toast(t, kind = 'error') { const el = $('toast'); el.textContent = t; el.className = `toast show ${kind}`; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600); }
 
 // ---------- 操作 ----------
 function afterAction() { save(); render(); }
@@ -496,6 +505,16 @@ document.addEventListener('click', (e) => {
   act(b.dataset.act, b.dataset.a, b.dataset.b);
 });
 $('nextBtn').addEventListener('click', nextMonth);
+// キーボード操作(PC):N = 次の月へ、1〜5 = タブ、Esc = 閉じる
+document.addEventListener('keydown', (e) => {
+  if (!S || e.target.closest('input, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const open = !$('modal').classList.contains('hidden');
+  if (e.key === 'Escape') { if (open && !S.pendingEvent) closeModal(); return; }
+  if (open || !$('title').classList.contains('hidden')) return;
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); nextMonth(); }
+  const tabs = ['rd', 'hangar', 'fleet', 'crew', 'log'];
+  if (/^[1-5]$/.test(e.key)) { act('tab', tabs[+e.key - 1]); }
+});
 $('helpBtn').addEventListener('click', showHelp);
 $('soundBtn').addEventListener('click', () => { toggleSound(); renderHUD(); });
 $('panelToggle').addEventListener('click', () => { document.body.classList.toggle('panel-closed'); setTimeout(() => scene.resize(), 320); });
