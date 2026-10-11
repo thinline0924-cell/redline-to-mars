@@ -241,8 +241,9 @@ export function maneuverDiff(s, craft, m) {
   if (m.capture) d += craft.courseErr;
   return d;
 }
+// その移動で使えるロケット。「宇宙で使う用」は打ち上げでは使わない(宇宙まで残す)
 export function eligibleRockets(craft, m) {
-  return craft.parts.filter(p => PARTS[p.type].kind === 'rocket' && !(m.surface && PARTS[p.type].noSurface));
+  return craft.parts.filter(p => PARTS[p.type].kind === 'rocket' && !(m.surface && PARTS[p.type].noSurface) && !(m.id === 'launch' && p.use === 'space'));
 }
 export function requiredThrust(s, craft, m) { return Math.ceil(maneuverDiff(s, craft, m) * craftMass(craft)); }
 
@@ -304,9 +305,10 @@ export function maneuverChecks(s, craft, m) {
   const maxThrust = eligibleRockets(craft, m).reduce((a, r) => a + PARTS[r.type].thrust, 0);
   if (need > 0) {
     const known = !m.land || !!s.known.landDiff;
-    add(maxThrust >= need, known ? `ロケットの推力が足りる(最大 ${maxThrust} ≧ 必要 ${need})` : `ロケットの推力 最大 ${maxThrust}(必要な量は未調査)`,
-      `ロケットの推力が足りない(最大 ${maxThrust} < 必要 ${need})`,
-      craft.loc === 'earth' ? 'ロケットを足す(ただしロケットも重さになる)' : 'ロケットを積んだ船とドッキングするか、いらない部品を捨てて軽くする', 'thrust');
+    const kind = m.id === 'launch' ? '打ち上げ用ロケット' : 'ロケット';
+    add(maxThrust >= need, known ? `${kind}の推力が足りる(最大 ${maxThrust} ≧ 必要 ${need})` : `${kind}の推力 最大 ${maxThrust}(必要な量は未調査)`,
+      `${kind}の推力が足りない(最大 ${maxThrust} < 必要 ${need})`,
+      craft.loc === 'earth' ? '「打ち上げ用ロケット」を足す(宇宙で使う用は打ち上げでは使わない)' : 'ロケットを積んだ船とドッキングするか、いらない部品を捨てて軽くする', 'thrust');
   }
   return checks;
 }

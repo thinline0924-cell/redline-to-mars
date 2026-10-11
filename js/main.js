@@ -150,10 +150,14 @@ function simulatePlan(craft) {
     const max = rockets.reduce((a, r) => a + PARTS[r.type].thrust, 0);
     const pass = need <= max;
     const missingTech = m.techs.filter(t => !G.owned(S, t));
-    out.push({ m, need, max, mass: G.craftMass(clone), d, assumed, pass: pass && !missingTech.length, missingTech });
+    const row = { m, need, max, mass: G.craftMass(clone), d, assumed, pass: pass && !missingTech.length, missingTech, used: '' };
+    out.push(row);
     if (!pass) { ok = false; break; }
     // 必要な分だけ使ったことにする
     const sel = need > 0 ? autoSelectFor(clone, m, need) : [];
+    const cnt = {};
+    for (const p of clone.parts) if (sel.includes(p.uid)) { const k = `${PARTS[p.type].name}${p.use === 'space' ? '(宇宙用)' : p.use === 'launch' ? '(打ち上げ用)' : ''}`; cnt[k] = (cnt[k] || 0) + 1; }
+    row.used = Object.entries(cnt).map(([k, n]) => `${k}×${n}`).join('・');
     clone.parts = clone.parts.filter(p => !sel.includes(p.uid) || PARTS[p.type].reusable);
     if (m.reentry) clone.parts = clone.parts.filter(p => PARTS[p.type].shielded);
   }
@@ -226,9 +230,9 @@ function panelHangar() {
   const plan = simulatePlan(craft);
   h += `<h3>飛行計画の見積もり</h3><p class="small">この船で、どこまで行けるかの計算(故障がない場合)。打ち上げでは「打ち上げ用」、そのあとは「宇宙で使う」ロケットを順に使い捨てていく。</p><div class="chips small-chips">${Object.entries(ROUTES).map(([k, r]) => `<button class="chip ${planRoute === k ? 'on' : ''}" data-act="route" data-a="${k}">${r.label}</button>`).join('')}
     <button class="chip ${planAero ? 'on' : ''}" data-act="aero">火星での減速:${planAero ? '大気でブレーキ' : 'ロケット'}</button></div>
-    <table class="plan"><tr><th>移動</th><th>重さ</th><th>必要/最大の推力</th><th></th></tr>`;
+    <table class="plan"><tr><th>移動</th><th>重さ</th><th>必要/使える推力</th><th>使うロケット</th></tr>`;
   for (const r of plan.out) {
-    h += `<tr class="${r.pass ? 'ok' : 'ng'}"><td>${esc(r.m.label)}${r.assumed ? '<small>(難しさ不明→3で計算)</small>' : ''}</td><td>${r.mass}</td><td>${r.need} / ${r.max}</td><td>${r.missingTech.length ? `<small>要開発:${esc(r.missingTech.map(t => TECHS[t].name).join('・'))}</small>` : r.pass ? '✓' : '✗ 推力不足'}</td></tr>`;
+    h += `<tr class="${r.pass ? 'ok' : 'ng'}"><td>${esc(r.m.label)}${r.assumed ? '<small>(難しさ不明→3で計算)</small>' : ''}</td><td>${r.mass}</td><td>${r.need} / ${r.max}</td><td>${r.missingTech.length ? `<small class="warn">✗ 要開発:${esc(r.missingTech.map(t => TECHS[t].name).join('・'))}</small>` : r.pass ? `✓ <small>${esc(r.used || 'ロケット不要')}</small>` : `✗ 推力不足<small>${r.m.id === 'launch' ? '「打ち上げ用」を足す' : '「宇宙で使う」ロケットを足す'}</small>`}</td></tr>`;
   }
   h += `</table>`;
   if (plan.out.some(r => !r.pass)) h += `<div class="row"><button class="btn small go" data-act="autoFill">足りないロケットを自動で足す</button><span class="small">目的地:${esc(ROUTES[planRoute].label)}</span></div>`;
@@ -240,7 +244,7 @@ function panelHangar() {
   const lo = G.maneuversFor(S, craft).find(o => o.m.id === 'launch');
   const ng = lo.checks.filter(x => !x.ok);
   h += `<h3>打ち上げ</h3>${moveCard(craft, lo)}`;
-  h += `<div class="sticky-foot"><div class="sf-stats"><span>重さ <b>${mass}</b></span><span>費用 <b>${m1(cost)}</b></span><span class="${lo.maxThrust >= lo.need ? 'okc' : 'warn'}">推力 <b>${lo.maxThrust}</b>/${lo.need}</span></div>
+  h += `<div class="sticky-foot"><div class="sf-stats"><span>重さ <b>${mass}</b></span><span>費用 <b>${m1(cost)}</b></span><span class="${lo.maxThrust >= lo.need ? 'okc' : 'warn'}">打ち上げ用の推力 <b>${lo.maxThrust}</b>/${lo.need}</span></div>
     <div class="sf-note ${ng.length ? 'warn' : 'okc'}">${ng.length ? `✗ ${esc(ng[0].bad)}` : '✓ 打ち上げできます'}</div>
     <button class="btn go" data-act="burn" data-a="${craft.id}" data-b="launch" ${lo.ok ? '' : 'disabled'}>🚀 打ち上げ…</button></div>`;
   h += `<div class="row"><button class="btn danger small" data-act="delDraft">この設計を取り消す</button></div>`;
